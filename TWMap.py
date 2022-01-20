@@ -4,10 +4,19 @@ import zlib
 from PIL import Image
 
 
-def safe_chr(i):
-    return chr(max(0, min(i if i >= 0 else 256 + i, 256)))
+class ItemType:
+    def __init__(self, type_id: int, start: int, num: int):
+        self.type_id = type_id
+        self.start = start
+        self.num = num
 
+    @staticmethod
+    def from_data(data: DataFile):
+        return ItemType(data.read_int(4), data.read_int(4), data.read_int(4))
 
+## TODO: add intermediary classes (ie read_item_type(2, 0) -> {'version', ...})
+
+## TODO: rename datafilereader
 class DataFile:
     def __init__(self, path: str):
         # open file and store bytes
@@ -35,16 +44,18 @@ class DataFile:
         self.item_size = self.read_int(4)
         self.data_size_unc = self.read_int(4)
 
-        # TODO: read itemtypes
+        # read itemtypes
+        self.item_types: list[ItemType] = []
         for _ in range(self.num_item_types):
-            self.read_int(4)
-            self.read_int(4)
-            self.read_int(4)
+            self.item_types.append(ItemType.from_data(self))
 
         # read offsets
         self._item_offsets = [self.read_int(4) for _ in range(self.num_items)]
         self._data_offsets = [self.read_int(4) for _ in range(self.num_data)]
         self._data_sizes = [self.read_int(4) for _ in range(self.num_data)]
+
+        # save items start
+        self._items_start = self._pointer
 
         # calculate data section start
         self._data_start = self.num_item_types * 12
@@ -61,14 +72,6 @@ class DataFile:
     def read_int(self, num_bytes: int, signed: bool = True):
         return int.from_bytes(self.read(num_bytes), byteorder='little', signed=signed)
 
-    def read_istr(self, num_bytes: int):
-        return ''.join([''.join([
-            safe_chr(((val >> 24) & 0xff)-128),
-            safe_chr(((val >> 16) & 0xff)-128),
-            safe_chr(((val >> 8) & 0xff)-128),
-            safe_chr((val & 0xff)-128),
-        ]) for val in self.read(num_bytes)]).partition('\x00')[0][::-1]
-
     def get_data(self, data_ptr: int):
         offset = self._data_offsets[data_ptr]
         next_offset = self._data_offsets[data_ptr + 1] if data_ptr + 1 < len(self._data_offsets) else self.size
@@ -77,6 +80,9 @@ class DataFile:
     def get_data_str(self, data_ptr: int):
         return self.get_data(data_ptr)[:-1].decode('ascii')
 
+
+class Item:
+    def __init__(self, )
 
 class ItemVersion:
     def __init__(self):
@@ -143,12 +149,24 @@ class ItemImage:
         if external:
             name = data.get_data_str(name_ptr)
             img = Image.open(f'mapres/{name}.png')
-            ItemImage(img, external, name)
+            return ItemImage(img, external, name)
         else:
             img_data = data.get_data(data_ptr)
             name = data.get_data_str(name_ptr)
             img = Image.frombytes('RGBA', (width, height), img_data)  # type: ignore
             return ItemImage(img, external, name)
+
+
+class ItemEnvPoint:
+    @staticmethod
+    def from_data(data: DataFile, size: int):
+        pass
+
+
+class ItemEnvPointSound(ItemEnvPoint):
+    @staticmethod
+    def from_data(data: DataFile, size: int):
+        super().from_data(data, size)
 
 
 class ItemEnvelope:
@@ -170,6 +188,8 @@ class ItemEnvelope:
         name = data.read_istr(32)
         synch = data.read_int(4)
 
+        return ItemEnvelope()
+
 
 class ItemGroup:
     def __init__(self):
@@ -180,7 +200,26 @@ class ItemGroup:
         if not size == 60:
             raise ValueError('ItemGroup: expected size 60')
 
-        data.read(60)
+        version = data.read_int(4)
+        if not version == 3:
+            raise ValueError('ItemGroup: expected version 3')
+
+        x_offset = data.read_int(4)
+        y_offset = data.read_int(4)
+        x_parallax = data.read_int(4)
+        y_parallax = data.read_int(4)
+        start_layer = data.read_int(4)
+        num_layers = data.read_int(4)
+
+        clipping = data.read_int(4)
+        clip_x = data.read_int(4)
+        clip_y = data.read_int(4)
+        clip_width = data.read_int(4)
+        clip_height = data.read_int(4)
+
+        name = data.read_istr(12)
+
+        return ItemGroup()
 
 
 class ItemLayer:
@@ -240,6 +279,8 @@ class Tilelayer(ItemLayer):
         data_switch_ptr = data.read_int(4)
         data_tune_ptr = data.read_int(4)
 
+        return Tilelayer(0)
+
 
 class QuadLayer(ItemLayer):
     @staticmethod
@@ -256,14 +297,16 @@ class QuadLayer(ItemLayer):
         image_ref = data.read_int(4)
         name = data.read_istr(12)
 
+        return QuadLayer(0)
 
-class ItemEnvPoints:
-    @staticmethod
-    def from_data(data: DataFile, size: int):
-        # if not size == 24:
-        #     raise ValueError('ItemEnvPoints: expected size 24')
 
-        data.read(size)
+# class ItemEnvPoints:
+#     @staticmethod
+#     def from_data(data: DataFile, size: int):
+#         # if not size == 24:
+#         #     raise ValueError('ItemEnvPoints: expected size 24')
+
+#         data.read(size)
 
 
 class ItemUUID:
@@ -274,11 +317,18 @@ class ItemUUID:
 
 class TWMap:
     def __init__(self):
-        pass
+        self._item_version = ItemVersion()
+        self._item_info = ItemInfo('', '', '', '', [''])
+        self._item_images: list[ItemImage] = []
+        self._item_envelopes: list[ItemEnvelope] = []
+        self._item_groups: list[ItemGroup] = [ItemGroup()]
 
     @staticmethod
     def open(path: str):
         data = DataFile(path)
+
+        m = TWMap()
+        m._item_groups = []
 
         # read items
         for _ in range(data.num_items):
@@ -286,21 +336,15 @@ class TWMap:
             item_type = (type_and_id >> 16) & 0xffff
             size = data.read_int(4)
             if item_type == 0:
-                ItemVersion.from_data(data, size)
+                m._item_version = ItemVersion.from_data(data, size)
             elif item_type == 1:
-                ItemInfo.from_data(data, size)
+                m._item_info = ItemInfo.from_data(data, size)
             elif item_type == 2:
-                ItemImage.from_data(data, size)
+                m._item_images.append(ItemImage.from_data(data, size))
             elif item_type == 3:
-                ItemEnvelope.from_data(data, size)
+                m._item_envelopes.append(ItemEnvelope.from_data(data, size))
             elif item_type == 4:
-                ItemGroup.from_data(data, size)
-            elif item_type == 5:
-                ItemLayer.from_data(data, size)
-            elif item_type == 6:
-                ItemEnvPoints.from_data(data, size)
-            elif item_type == 0xffff:
-                ItemUUID.from_data(data, size)
+                m._item_groups.append(ItemGroup.from_data(data, size))
             else:
                 raise ValueError('TWMap: item_type not recognized')
 
