@@ -1,8 +1,9 @@
 import zlib
 
-from typing import Union
+from utils import ItemType, ints_to_string
 
 
+# TODO: introduce enums
 class DataFileReader:
     def __init__(self, path: str):
         # open file and store bytes
@@ -32,9 +33,9 @@ class DataFileReader:
         self._data_size_unc = self._read_int(4)
 
         # read itemtypes
-        self.item_types: list[dict[str, int]] = []
+        self._item_types = []
         for _ in range(self._num_item_types):
-            self.item_types.append({
+            self._item_types.append({
                 'type_id': self._read_int(4),
                 'start': self._read_int(4),
                 'num': self._read_int(4)
@@ -63,8 +64,8 @@ class DataFileReader:
     def _read_int(self, num_bytes: int, signed: bool = True):
         return int.from_bytes(self._read(num_bytes), byteorder='little', signed=signed)
 
-    def _read_istr(self, num_bytes: int):
-        return self._read(num_bytes)
+    def _read_istr(self, num_ints: int):
+        return ints_to_string([self._read_int(4) for _ in range(num_ints)])
 
     def _seek(self, pos: int):
         self._pointer = pos
@@ -75,17 +76,22 @@ class DataFileReader:
     def _num_bytes_read(self):
         return self._pointer - self._mark_pos
 
+    def get_num_items(self, type_id: int):
+        for item_type in self._item_types:
+            if item_type['type_id'] == type_id:
+                return item_type['num']
+
     def get_item(self, type_id: int, index: int):
         num_prev_items = 0
-        for item_type in self.item_types:
+        for item_type in self._item_types:
             if item_type['type_id'] == type_id:
                 if index < 0 or index >= item_type['num']:
                     raise ValueError('Index out of range')
 
                 self._seek(self._items_start + self._item_offsets[num_prev_items + index])
 
-                type_and_id = self._read_int(4)
-                if not index == type_and_id & 0xffff and type_id == (type_and_id >> 16) & 0xffff:
+                # just make sure the ids and indices match
+                if not (index == self._read_int(2, False) and type_id == self._read_int(2, False)):
                     raise ValueError()
 
                 size = self._read_int(4)
@@ -104,8 +110,6 @@ class DataFileReader:
                     return self._read_item_layer(size)
                 elif type_id == 6:
                     raise ValueError('use get_envpoint instead')
-                elif type_id == 0xffff:
-                    return self._read_item_uuid(size)
                 else:
                     raise ValueError('unrecognized type_id')
 
@@ -113,6 +117,49 @@ class DataFileReader:
                 num_prev_items += item_type['num']
 
         raise ValueError('Item not found')
+
+    def get_envpoint(self, channel: int, start_point: int, num_points: int):
+        # TODO: add bezier support
+        num_prev_items = 0
+        for item_type in self._item_types:
+            if item_type['type_id'] == 6:
+                envpoint_begin = self._items_start + self._item_offsets[num_prev_items]
+
+                self._seek(envpoint_begin + start_point * 24)  # 24 -> assuming version <= 2
+
+                envpoints: list[dict[str, Union[int, list[int]]]] = []
+                for _ in range(num_points):
+                    if channel == 1:
+                        envpoints.append({
+                            'time': self._read_int(4),
+                            'curve_type': self._read_int(4),
+                            'volume': self._read_int(4)
+                        })
+                        self._read_int(12)  # skip last bytes
+                    elif channel == 3:
+                        envpoints.append({
+                            'time': self._read_int(4),
+                            'curve_type': self._read_int(4),
+                            'x': self._read_int(4),
+                            'y': self._read_int(4),
+                            'rotation': self._read_int(4)
+                        })
+                        self._read_int(4)  # skip last bytes
+                    elif channel == 4:
+                        envpoints.append({
+                            'time': self._read_int(4),
+                            'curve_type': self._read_int(4),
+                            'color': [self._read_int(4) for _ in range(4)]
+                        })
+                    else:
+                        raise ValueError('unexpected channel number')
+
+                return envpoints
+
+            else:
+                num_prev_items += item_type['num']
+
+        raise ValueError('No envpoints found')
 
     def get_data(self, data_ptr: int):
         offset = self._data_offsets[data_ptr]
@@ -127,6 +174,7 @@ class DataFileReader:
             'version': self._read_int(4)
         }
 
+        # TODO: refactor this
         if not size == 4:
             raise ValueError()
 
@@ -177,7 +225,7 @@ class DataFileReader:
             'channels': self._read_int(4),
             'start_point': self._read_int(4),
             'num_points': self._read_int(4),
-            'name': self._read_istr(32),
+            'name': self._read_istr(8),
             'synchronized': self._read_int(4),
         }
 
@@ -203,7 +251,7 @@ class DataFileReader:
             'clip_y': self._read_int(4),
             'clip_width': self._read_int(4),
             'clip_height': self._read_int(4),
-            'name': self._read_istr(12)
+            'name': self._read_istr(3)
         }
 
         if not size == 60:
@@ -245,7 +293,7 @@ class DataFileReader:
             'color_envelope_offset': self._read_int(4),
             'image_ref': self._read_int(4),
             'data_ptr': self._read_int(4),
-            'name': self._read_istr(12),
+            'name': self._read_istr(3),
             'data_tele_ptr': self._read_int(4),
             'data_speedup_ptr': self._read_int(4),
             'data_front_ptr': self._read_int(4),
@@ -267,7 +315,7 @@ class DataFileReader:
             'num_quads': self._read_int(4),
             'data_ptr': self._read_int(4),
             'image_ref': self._read_int(4),
-            'name': self._read_istr(12)
+            'name': self._read_istr(3)
         }
 
         if not size == 28:
@@ -284,7 +332,7 @@ class DataFileReader:
             'num_sources': self._read_int(4),
             'data_ptr': self._read_int(4),
             'sound_ref': self._read_int(4),
-            'name': self._read_istr(12),
+            'name': self._read_istr(3),
             'deprecated': deprecated
         }
 
@@ -296,54 +344,7 @@ class DataFileReader:
 
         return value
 
-    def _read_item_uuid(self, size: int):
-        pass
-
-    def get_envpoint(self, channel: int, start_point: int, num_points: int):
-        # TODO: add bezier support
-        num_prev_items = 0
-        for item_type in self.item_types:
-            if item_type['type_id'] == 6:
-                envpoint_begin = self._items_start + self._item_offsets[num_prev_items]
-
-                self._seek(envpoint_begin + start_point * 24)  # 24 -> assuming version <= 2
-
-                envpoints: list[dict[str, Union[int, list[int]]]] = []
-                for _ in range(num_points):
-                    if channel == 1:
-                        envpoints.append({
-                            'time': self._read_int(4),
-                            'curve_type': self._read_int(4),
-                            'volume': self._read_int(4)
-                        })
-                        self._read_int(12)  # skip last bytes
-                    elif channel == 3:
-                        envpoints.append({
-                            'time': self._read_int(4),
-                            'curve_type': self._read_int(4),
-                            'x': self._read_int(4),
-                            'y': self._read_int(4),
-                            'rotation': self._read_int(4)
-                        })
-                        self._read_int(4)  # skip last bytes
-                    elif channel == 4:
-                        envpoints.append({
-                            'time': self._read_int(4),
-                            'curve_type': self._read_int(4),
-                            'color': [self._read_int(4) for _ in range(4)]
-                        })
-                    else:
-                        raise ValueError('unexpected channel number')
-
-                return envpoints
-
-            else:
-                num_prev_items += item_type['num']
-
-        raise ValueError('No envpoints found')
-
 
 if __name__ == '__main__':
-    df = DataFileReader('XmasMove.map')
-    print(df.get_item(3, 0))
-    print(df.get_envpoint(3, 0, 4))
+    df = DataFileReader('HeyTux2.map')
+    print(df.get_item(2, 0))
