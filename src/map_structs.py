@@ -1,13 +1,12 @@
-# from stringfile import StringFile  # TODO: testing
-from structs import c_rawstr4, c_int32, c_struct
+from structs import c_rawstr4, c_int32, c_struct, c_uint16
 
 
-class VersionHeader(c_struct):
+class CVersionHeader(c_struct):
     magic: c_rawstr4
     version: c_int32
 
 
-class HeaderV4(c_struct):
+class CHeaderV4(c_struct):
     size: c_int32
     swaplen: c_int32
     num_item_types: c_int32
@@ -17,14 +16,17 @@ class HeaderV4(c_struct):
     data_size: c_int32
 
 
-class ItemType(c_struct):
+class CItemType(c_struct):
     type_id: c_int32
     start: c_int32
     num: c_int32
 
 
-# s = StringFile('test_maps/HeyTux2.map', 'R')
-# ver_header = VersionHeader.from_data(s)
-# header = HeaderV4.from_data(s)
-# item_types = [ItemType.from_data(s) for _ in range(header.num_item_types.value)]
-# print(item_types)
+class CItemHeader(c_struct):
+    type_id: c_uint16
+    index: c_uint16
+    size: c_int32
+
+
+class CItemVersion(c_struct):
+    version: c_int32
