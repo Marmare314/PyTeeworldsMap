@@ -1,5 +1,10 @@
 from PIL import Image
-from constants import EnumItemType
+from typing import NewType, Optional
+
+from constants import EnumTileLayerFlags
+
+ItemReference = NewType('ItemReference', int)
+ColorTuple = tuple[int, int, int, int]
 
 
 # TODO: make sure references are internal and valid
@@ -8,7 +13,8 @@ class ItemManager:
         self.version = ItemVersion(3)
         self.info = ItemInfo()
         self.images: dict[int, ItemImage] = {}
-        # envelopes
+        self.envelopes: dict[int, ItemEnvelope] = {}
+        self.layers: dict[int, ItemLayer] = {}
         self.groups: dict[int, ItemGroup] = {}
 
     def insert(self, item: 'Item'):
@@ -19,6 +25,12 @@ class ItemManager:
             self.version = item
         elif isinstance(item, ItemInfo):
             self.info = item
+        elif isinstance(item, ItemImage):
+            self.images[id] = item
+        elif isinstance(item, ItemLayer):
+            self.layers[id] = item
+        elif isinstance(item, ItemGroup):
+            self.groups[id] = item
         else:
             raise ValueError('type of item not known')
 
@@ -27,20 +39,23 @@ class ItemManager:
 
 
 class Item:
-    type_id: int  # TODO: is this needed?
+    pass
 
 
 class ItemVersion(Item):
-    type_id = EnumItemType.VERSION
-
     def __init__(self, version: int):
         self.version = version
 
 
 class ItemInfo(Item):
-    type_id = EnumItemType.INFO
+    def __init__(self,
+                 author: str = '',
+                 mapversion: str = '',
+                 credits: str = '',
+                 license: str = '',
+                 settings: list[str] = []):
+        # TODO: write getters/setters to ensure the values can be stored
 
-    def __init__(self, author: str = '', mapversion: str = '', credits: str = '', license: str = '', settings: list[str] = []):
         self.author = author
         self.mapversion = mapversion
         self.credits = credits
@@ -49,8 +64,6 @@ class ItemInfo(Item):
 
 
 class ItemImage(Item):
-    type_id = EnumItemType.IMAGE
-
     def __init__(self):
         self._image = None
         self._name = None
@@ -83,18 +96,27 @@ class ItemImage(Item):
 
 
 class ItemEnvelope(Item):
-    type_id = EnumItemType.ENVELOPE
+    pass
 
 
 class ItemLayer(Item):
-    type_id = EnumItemType.LAYER
-
-    def __init__(self, detail: bool):
+    def __init__(self, detail: bool = False):
         self.detail = detail
 
 
 class TileLayer(ItemLayer):
-    pass
+    def __init__(self,
+                 width: int,
+                 height: int,
+                 flags: list[EnumTileLayerFlags] = [],
+                 color_envelope_ref: Optional[ItemEnvelope | ItemReference] = None,
+                 image_ref: Optional[ItemImage | ItemReference] = None,
+                 color_envelope_offset: int = 0,
+                 color: ColorTuple = (0, 0, 0, 0),
+                 detail: bool = False,
+                 name: str = '',
+                 tile_data: Optional[bytes] = None):
+        pass
 
 
 class QuadLayer(ItemLayer):
@@ -106,8 +128,20 @@ class SoundLayer(ItemLayer):
 
 
 class ItemGroup(Item):
-    type_id = EnumItemType.GROUP
+    def __init__(self,
+                 layers: list[ItemLayer] | list[ItemReference],
+                 x_offset: int = 0,
+                 y_offset: int = 0,
+                 x_parallax: int = 0,
+                 y_parallax: int = 0,
+                 clipping: bool = False,
+                 clip_x: int = 0,
+                 clip_y: int = 0,
+                 clip_width: int = 0,
+                 clip_height: int = 0,
+                 name: str = ''):
+        pass
 
 
 class ItemSound(Item):
-    type_id = EnumItemType.SOUND
+    pass

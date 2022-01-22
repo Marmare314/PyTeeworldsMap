@@ -41,6 +41,16 @@ class CItemInfo(c_struct):
     settings_ptr: c_int32
 
 
+class CItemImage(c_struct):
+    version: c_int32
+    width: c_int32
+    height: c_int32
+    external: c_int32
+    name_ptr: c_int32
+    data_ptr: c_int32
+    # variant: c_int32  # ver2 extension (vanilla)
+
+
 class CItemEnvelope(c_struct):
     pass
 
@@ -89,10 +99,6 @@ class CItemGroup(c_struct):
     name: c_intstr3
 
 
-class CItemGroupV3ext(CItemGroup):
-    name: c_intstr3
-
-
 class CItemLayer(c_struct):
     _version: c_int32
     type: c_int32
@@ -119,3 +125,47 @@ class CItemTileLayer(c_struct):
     data_front_ptr: c_int32
     data_switch_ptr: c_int32
     data_tune_ptr: c_int32
+
+
+class CTileVanilla(c_struct):
+    pass
+
+
+class CTileTele(c_struct):
+    pass
+
+
+class CTileSpeedup(c_struct):
+    pass
+
+
+class CTileSwitch(c_struct):
+    pass
+
+
+class CTileTune(c_struct):
+    pass
+
+
+class CItemQuadLayer(c_struct):
+    pass
+
+
+class CQuad(c_struct):
+    pass
+
+
+class CItemSoundLayer(c_struct):
+    pass
+
+
+class CSoundShape(c_struct):
+    pass
+
+
+class CSoundSource(c_struct):
+    pass
+
+
+class CItemSound(c_struct):
+    pass

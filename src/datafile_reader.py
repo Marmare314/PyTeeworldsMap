@@ -1,9 +1,10 @@
 from stringfile import StringFile
 from structs import c_int32
-from map_structs import CVersionHeader, CHeaderV4, CItemType, CItemVersion, CItemHeader, CItemInfo
-from items import ItemVersion, ItemInfo
-from constants import EnumItemType
+from map_structs import CItemGroup, CItemLayer, CItemQuadLayer, CItemSoundLayer, CItemTileLayer, CVersionHeader, CHeaderV4, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage
+from items import ItemGroup, ItemImage, ItemReference, ItemVersion, ItemInfo, TileLayer
+from constants import EnumItemType, EnumLayerType, EnumTileLayerFlags
 import zlib
+from PIL import Image
 
 
 class DataFileReader:
@@ -56,14 +57,35 @@ class DataFileReader:
                 return item_type.start.value
         raise RuntimeError('type_id not found')
 
+    def _get_num_items(self, type_id: EnumItemType):
+        for item_type in self._item_types:
+            if item_type.type_id.value == type_id:
+                return item_type.num.value
+        raise RuntimeError('type_id not found')
+
     def _get_item(self, type_id: EnumItemType, index: int):
         self._data.seek(self._items_start + self._item_offsets[self._get_type_start(type_id) + index])
 
         # TODO: check that sizes match
         if type_id == EnumItemType.VERSION:
             return CItemHeader.from_data(self._data), CItemVersion.from_data(self._data)
-        else:
-            return 1, 2
+        elif type_id == EnumItemType.INFO:
+            return CItemHeader.from_data(self._data), CItemInfo.from_data(self._data)
+        elif type_id == EnumItemType.IMAGE:
+            return CItemHeader.from_data(self._data), CItemImage.from_data(self._data)
+        elif type_id == EnumItemType.LAYER:
+            header = CItemHeader.from_data(self._data)
+            layer_header = CItemLayer.from_data(self._data)
+            if layer_header.type.value == EnumLayerType.TILES:
+                return header, (layer_header, CItemTileLayer.from_data(self._data))
+            elif layer_header.type.value == EnumLayerType.QUADS:
+                return header, (layer_header, CItemQuadLayer.from_data(self._data))
+            elif layer_header.type.value == EnumLayerType.SOUNDS:
+                return header, (layer_header, CItemSoundLayer.from_data(self._data))
+            else:
+                raise RuntimeError('layer type not recognized')
+        elif type_id == EnumItemType.GROUP:
+            return CItemHeader.from_data(self._data), CItemGroup.from_data(self._data)
         raise RuntimeError('type_id not known')
 
     @property
@@ -96,3 +118,81 @@ class DataFileReader:
         # TODO: check the rest
 
         return ItemInfo(author, mapversion, credits, license, settings), 0
+
+    @property
+    def item_images(self):
+        for i in range(self._get_num_items(EnumItemType.IMAGE)):
+            _, item = self._get_item(EnumItemType.IMAGE, i)
+            if not isinstance(item, CItemImage):
+                raise RuntimeError('unexpected item returned')
+
+            # TODO: check version
+
+            name = ''
+            if item.name_ptr.value > 0:
+                name = self._get_data_str(item.name_ptr.value)
+
+            image = ItemImage()
+            if item.external.value:
+                image.set_external(name)
+            else:
+                loaded_img: Image.Image = Image.frombytes(  # type: ignore
+                    'RGBA',
+                    (item.width.value, item.height.value),
+                    self._get_data(item.data_ptr.value)
+                )
+                image.set_internal(loaded_img, name)
+
+            yield image, i
+
+    @property
+    def item_layers(self):
+        for i in range(self._get_num_items(EnumItemType.LAYER)):
+            _, item = self._get_item(EnumItemType.LAYER, i)
+            if not isinstance(item, tuple):
+                raise RuntimeError('unexpected item returned')
+            if not isinstance(item[0], CItemLayer):
+                raise RuntimeError('unexpected item returned')
+
+            # TODO: check version
+
+            if isinstance(item[1], CItemTileLayer):
+                yield TileLayer(
+                    item[1].width.value,
+                    item[1].height.value,
+                    [f for f in EnumTileLayerFlags if item[1].flags.value & f],
+                    ItemReference(item[1].color_envelope_ref.value),
+                    ItemReference(item[1].image_ref.value),
+                    item[1].color_envelope_offset.value,
+                    item[1].color.value,
+                    item[0].flags.value == 1,
+                    item[1].name.value,
+                    self._get_data(item[1].data_ptr.value)
+                ), i
+            elif isinstance(item[1], CItemQuadLayer):
+                pass
+            else:
+                raise NotImplementedError()
+
+    @property
+    def item_groups(self):
+        for i in range(self._get_num_items(EnumItemType.GROUP)):
+            _, item = self._get_item(EnumItemType.GROUP, i)
+            if not isinstance(item, CItemGroup):
+                raise RuntimeError('unexpected item returned')
+
+            # TODO: check version
+
+            yield ItemGroup(
+                [ItemReference(item.start_layer.value + i) for i in range(item.num_layers.value)],
+                item.x_offset.value,
+                item.y_offset.value,
+                item.x_parallax.value,
+                item.y_parallax.value,
+                item.clipping.value > 0,
+                item.clip_x.value,
+                item.clip_y.value,
+                item.clip_width.value,
+                item.clip_height.value,
+                item.name.value
+            ), i

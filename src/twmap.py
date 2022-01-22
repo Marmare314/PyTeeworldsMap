@@ -14,6 +14,15 @@ class TWMap:
         self._item_manager.insert_with_id(*data.item_version)
         self._item_manager.insert_with_id(*data.item_info)
 
+        for image, i in data.item_images:
+            self._item_manager.insert_with_id(image, i)
+
+        for layer, i in data.item_layers:
+            self._item_manager.insert_with_id(layer, i)
+
+        for group, i in data.item_groups:
+            self._item_manager.insert_with_id(group, i)
+
 
 m = TWMap()
 m.open('test_maps/HeyTux2.map')
