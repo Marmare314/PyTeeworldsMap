@@ -127,7 +127,7 @@ class DataFileReader:
 
                 self._seek(envpoint_begin + start_point * 24)  # 24 -> assuming version <= 2
 
-                envpoints: list[dict[str, Union[int, list[int]]]] = []
+                envpoints = []
                 for _ in range(num_points):
                     if channel == 1:
                         envpoints.append({
@@ -263,7 +263,7 @@ class DataFileReader:
         return value
 
     def _read_item_layer(self, size: int):
-        value: dict[str, Union[int, dict[str, Union[int, bytes, list[int]]]]] = {
+        value = {
             'version': self._read_int(4),
             'type': self._read_int(4),
             'flags': self._read_int(4)
@@ -310,7 +310,7 @@ class DataFileReader:
         return value
 
     def _read_item_layer_quad(self, size: int):
-        value: dict[str, Union[int, bytes, list[int]]] = {
+        value = {
             'version': self._read_int(4),
             'num_quads': self._read_int(4),
             'data_ptr': self._read_int(4),
@@ -327,7 +327,7 @@ class DataFileReader:
         return value
 
     def _read_item_layer_sound(self, size: int, deprecated: int):
-        value: dict[str, Union[int, bytes, list[int]]] = {
+        value = {
             'version': self._read_int(4),
             'num_sources': self._read_int(4),
             'data_ptr': self._read_int(4),
