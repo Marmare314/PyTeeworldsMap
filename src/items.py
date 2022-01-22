@@ -2,19 +2,32 @@ from PIL import Image
 from constants import EnumItemType
 
 
+# TODO: make sure references are internal and valid
 class ItemManager:
     def __init__(self):
+        self.version = ItemVersion(3)
+        self.info = ItemInfo()
+        self.images: dict[int, ItemImage] = {}
+        # envelopes
+        self.groups: dict[int, ItemGroup] = {}
+
+    def insert(self, item: 'Item'):
         pass
 
     def insert_with_id(self, item: 'Item', id: int):
-        pass
+        if isinstance(item, ItemVersion):
+            self.version = item
+        elif isinstance(item, ItemInfo):
+            self.info = item
+        else:
+            raise ValueError('type of item not known')
 
     def clear(self):
         pass
 
 
 class Item:
-    type_id: int
+    type_id: int  # TODO: is this needed?
 
 
 class ItemVersion(Item):

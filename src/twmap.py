@@ -12,6 +12,7 @@ class TWMap:
         self._item_manager.clear()
 
         self._item_manager.insert_with_id(*data.item_version)
+        self._item_manager.insert_with_id(*data.item_info)
 
 
 m = TWMap()

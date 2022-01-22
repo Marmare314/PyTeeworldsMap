@@ -32,9 +32,6 @@ class c_int_impl(c_type):
     def size_bytes(cls) -> int:
         return cls._num_bytes
 
-    def __repr__(self):
-        return f'c_{"" if self._signed else "u"}int{self._num_bytes * 8}<{self._data}>'
-
 
 class c_int32(c_int_impl):
     _num_bytes = 4
@@ -46,7 +43,7 @@ class c_uint16(c_int_impl):
     _signed = False
 
 
-class c_rawstr_impl(c_type):
+class c_str_impl(c_type):
     _length: int
 
     def __init__(self, data: bytes):
@@ -54,24 +51,28 @@ class c_rawstr_impl(c_type):
 
         self._data = data
 
-    @property
-    def value(self):
-        return self._data.decode('ascii')
-
     @classmethod
-    def from_data(cls, data: StringFile) -> 'c_rawstr_impl':
+    def from_data(cls, data: StringFile) -> 'c_str_impl':
         return cls(data.read(cls._length))
 
     @classmethod
     def size_bytes(cls) -> int:
         return cls._length
 
-    def __repr__(self):
-        return f'c_rawstr<{self._length}, {self._data}>'
 
-
-class c_rawstr4(c_rawstr_impl):
+class c_rawstr4(c_str_impl):
     _length = 4
+
+    @property
+    def value(self):
+        return self._data.decode('utf8')
+
+
+class c_intstr3(c_str_impl):
+    _length = 4
+
+    @property
+    def value(self):
 
 
 T = TypeVar('T')
@@ -94,5 +95,9 @@ class c_struct:
             size += cls.__annotations__[var_name].size_bytes()
         return size
 
-    def __repr__(self):
-        return str({var_name: getattr(self, var_name) for var_name in self.__annotations__})
+
+class c_i32_color(c_struct):
+    r: c_int32
+    g: c_int32
+    b: c_int32
+    a: c_int32

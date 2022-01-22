@@ -1,4 +1,4 @@
-from structs import c_rawstr4, c_int32, c_struct, c_uint16
+from structs import c_intstr3, c_rawstr4, c_int32, c_struct, c_uint16, c_i32_color
 
 
 class CVersionHeader(c_struct):
@@ -30,3 +30,92 @@ class CItemHeader(c_struct):
 
 class CItemVersion(c_struct):
     version: c_int32
+
+
+class CItemInfo(c_struct):
+    version: c_int32
+    author_ptr: c_int32
+    map_version_ptr: c_int32
+    credits_ptr: c_int32
+    license_ptr: c_int32
+    settings_ptr: c_int32
+
+
+class CItemEnvelope(c_struct):
+    pass
+
+
+class CItemEnvPointSound(c_struct):
+    time: c_int32
+    curve_type: c_int32
+    volume: c_int32
+    _unused_1: c_int32
+    _unused_2: c_int32
+    _unused_3: c_int32
+
+
+class CItemEnvPointPosition(c_struct):
+    time: c_int32
+    curve_type: c_int32
+    x: c_int32
+    y: c_int32
+    rotation: c_int32
+    _unused: c_int32
+
+
+class CItemEnvPointColor(c_struct):
+    time: c_int32
+    curve_type: c_int32
+    color: c_i32_color
+
+
+class CItemGroup(c_struct):
+    version: c_int32
+    x_offset: c_int32
+    y_offset: c_int32
+    x_parallax: c_int32
+    y_parallax: c_int32
+    start_layer: c_int32
+    num_layers: c_int32
+
+    # ver2 extension
+    clipping: c_int32
+    clip_x: c_int32
+    clip_y: c_int32
+    clip_width: c_int32
+    clip_height: c_int32
+
+    # ver3 extension
+    name: c_intstr3
+
+
+class CItemGroupV3ext(CItemGroup):
+    name: c_intstr3
+
+
+class CItemLayer(c_struct):
+    _version: c_int32
+    type: c_int32
+    flags: c_int32
+
+
+class CItemTileLayer(c_struct):
+    version: c_int32
+    width: c_int32
+    height: c_int32
+    flags: c_int32
+    color: c_i32_color
+    color_envelope_ref: c_int32
+    color_envelope_offset: c_int32
+    image_ref: c_int32
+    data_ptr: c_int32
+
+    # ver3 extension
+    name: c_intstr3
+
+    # ddnet extension
+    data_tele_ptr: c_int32
+    data_speedup_ptr: c_int32
+    data_front_ptr: c_int32
+    data_switch_ptr: c_int32
+    data_tune_ptr: c_int32
