@@ -23,6 +23,11 @@ class TWMap:
         for group, i in data.item_groups:
             self._item_manager.insert_with_id(group, i)
 
+    @property
+    def game_layer(self):
+        return self._item_manager.game_layer
+
 
 m = TWMap()
 m.open('test_maps/HeyTux2.map')
+m.game_layer.get_tile(0, 0)

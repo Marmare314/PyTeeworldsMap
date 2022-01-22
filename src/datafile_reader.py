@@ -1,7 +1,7 @@
 from stringfile import StringFile
 from structs import c_int32
 from map_structs import CItemGroup, CItemLayer, CItemQuadLayer, CItemSoundLayer, CItemTileLayer, CVersionHeader, CHeaderV4, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage
-from items import ItemGroup, ItemImage, ItemReference, ItemVersion, ItemInfo, TileLayer
+from items import ItemGroup, ItemImage, ItemVersion, ItemInfo, TileLayer
 from constants import EnumItemType, EnumLayerType, EnumTileLayerFlags
 import zlib
 from PIL import Image
@@ -9,7 +9,8 @@ from PIL import Image
 
 class DataFileReader:
     def __init__(self, path: str):
-        self._data = StringFile(path, 'R')
+        with open(path, 'rb') as file:
+            self._data = StringFile(file.read())
 
         self._ver_header = CVersionHeader.from_data(self._data)
         if self._ver_header.magic.value not in ['DATA', 'ATAD']:
@@ -161,8 +162,8 @@ class DataFileReader:
                     item[1].width.value,
                     item[1].height.value,
                     [f for f in EnumTileLayerFlags if item[1].flags.value & f],
-                    ItemReference(item[1].color_envelope_ref.value),
-                    ItemReference(item[1].image_ref.value),
+                    item[1].color_envelope_ref.value,
+                    item[1].image_ref.value,
                     item[1].color_envelope_offset.value,
                     item[1].color.value,
                     item[0].flags.value == 1,
@@ -184,7 +185,7 @@ class DataFileReader:
             # TODO: check version
 
             yield ItemGroup(
-                [ItemReference(item.start_layer.value + i) for i in range(item.num_layers.value)],
+                [item.start_layer.value + i for i in range(item.num_layers.value)],
                 item.x_offset.value,
                 item.y_offset.value,
                 item.x_parallax.value,

@@ -74,16 +74,20 @@ class c_str_impl(c_type):
 
     @value.setter
     def value(self, value: str):
-        assert len(self._encode(value)) == self._length
+        assert self.fits_str(value)
 
         self._value = value
 
-    @staticmethod
-    def _encode(msg: str) -> bytes:
+    @classmethod
+    def fits_str(cls, value: str):
+        return len(cls._encode(value)) == cls._length
+
+    @classmethod
+    def _encode(cls, msg: str) -> bytes:
         raise NotImplementedError()
 
-    @staticmethod
-    def _decode(msg: bytes) -> str:
+    @classmethod
+    def _decode(cls, msg: bytes) -> str:
         raise NotImplementedError()
 
     @classmethod
@@ -98,35 +102,40 @@ class c_str_impl(c_type):
 class c_rawstr4(c_str_impl):
     _length = 4
 
-    @staticmethod
-    def _encode(msg: str):
+    @classmethod
+    def _encode(cls, msg: str):
         return msg.encode('utf8')
 
-    @staticmethod
-    def _decode(msg: bytes):
+    @classmethod
+    def _decode(cls, msg: bytes):
         return msg.decode('utf8')
 
 
 class c_intstr_impl(c_str_impl):
-    @staticmethod
-    def _encode(msg: str):
+    @classmethod
+    def _encode(cls, msg: str):
         byte_msg = b''
         for i in range(0, len(msg), 4):
             for b in msg[i:i+4][::-1]:
                 byte_msg += bytes([safe_ord(b) + 128])
-        return byte_msg
+        return byte_msg.zfill(cls._length)
 
-    @staticmethod
-    def _decode(msg: bytes):
+    @classmethod
+    def _decode(cls, msg: bytes):
         str_msg = ''
         for i in range(0, len(msg), 4):
             for b in msg[i:i+4][::-1]:
                 str_msg += safe_chr(b - 128)
 
-        return str_msg
+        return str_msg.rstrip('\0')
+
 
 class c_intstr3(c_intstr_impl):
-    _length = 12  # 3 * c_int32
+    _length = 3 * 4  # 3 * c_int32
+
+
+class c_intstr8(c_intstr_impl):
+    _length = 8 * 4
 
 
 T = TypeVar('T')
