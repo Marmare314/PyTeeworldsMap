@@ -10,60 +10,85 @@ ColorTuple = tuple[int, int, int, int]
 # TODO: make sure references are internal and valid
 class ItemManager:
     def __init__(self):
-        # TODO: insert game layer on init
+        self._item_set: set[Item] = set()
 
-        self.version = ItemVersion(3)
-        self.info = ItemInfo()
-        self.images: dict[int, ItemImage] = {}
-        self.envelopes: dict[int, ItemEnvelope] = {}
-        self.layers: dict[int, ItemLayer] = {}
-        self.groups: dict[int, ItemGroup] = {}
+        version = ItemVersion(3)
+        info = ItemInfo()
+        game_layer = TileLayer(100, 100, is_game=True, name='Game')
+        game_group = ItemGroup([game_layer], name='Game')
 
-    def insert(self, item: 'Item'):
-        pass
+        self.add(version)
+        self.add(info)
+        self.add(game_group)
 
-    def insert_with_id(self, item: 'Item', id: int):
-        if isinstance(item, ItemVersion):
-            self.version = item
-        elif isinstance(item, ItemInfo):
-            self.info = item
-        elif isinstance(item, ItemImage):
-            self.images[id] = item
-        elif isinstance(item, ItemLayer):
-            self.layers[id] = item
-        elif isinstance(item, ItemGroup):
-            self.groups[id] = item
+    def find_item(self, id: int):
+        pass  # TODO
+
+    def _generate_id(self, item: 'Item'):
+        pass  # TODO
+
+    def add(self, item: 'Item'):
+        if item._has_id:  # type: ignore
+            item_id: int = item._item_id  # type: ignore
+            stored_item = self.find_item(item_id)
+            if stored_item:
+                self._item_set.remove(stored_item)
+            self._item_set.add(item)
         else:
-            raise ValueError('type of item not known')
+            self._generate_id(item)
+            self._item_set.add(item)
 
     def clear(self):
-        self.images = {}
-        self.envelopes = {}
-        self.layers = {}
-        self.groups = {}
+        self._item_set = set()
+
+    @property
+    def info(self):
+        for item in self._item_set:
+            if isinstance(item, ItemInfo):
+                return item
+        raise RuntimeError('ItemManager should always have an info item')
+
+    @property
+    def layers(self):
+        for item in self._item_set:
+            if isinstance(item, ItemLayer):
+                yield item
 
     @property
     def game_layer(self) -> 'VanillaTileLayer':
-        for layer_id in self.layers:
-            if self.layers[layer_id].is_game:
-                layer = self.layers[layer_id]
-                if not isinstance(layer, VanillaTileLayer):
-                    raise RuntimeError('game_layer has unexpected type')
-                return layer
+        for layer in self.layers:
+            if not isinstance(layer, VanillaTileLayer):
+                raise RuntimeError('game_layer has unexpected type')
+            return layer
         raise RuntimeError('ItemManager should always have a game layer')
 
 
-# TODO: implement
-class ItemReference:
-    pass
-
-
 class Item:
-    pass  # add some getter/setter for a reference to the itemmanager
+    def __init__(self):
+        self._has_id = False
+
+    @property
+    def _item_id(self):
+        return self.__item_id
+
+    @_item_id.setter
+    def _item_id(self, value: int):
+        self._has_id = True
+        self.__item_id = value
+
+    @property
+    def _item_manager(self) -> ItemManager:
+        return self.__item_manager
+
+    @_item_manager.setter
+    def _item_manager(self, value: ItemManager):
+        self.__item_manager = value
 
 
 class ItemVersion(Item):
     def __init__(self, version: int):
+        super().__init__()
+
         self.version = version
 
 
@@ -74,17 +99,22 @@ class ItemInfo(Item):
                  credits: str = '',
                  license: str = '',
                  settings: list[str] = []):
-        # TODO: write getters/setters to ensure the values can be stored
+        super().__init__()
 
         self.author = author
         self.mapversion = mapversion
         self.credits = credits
         self.license = license
-        self.settings = settings
+        self.settings = settings  # TODO: a nicer interface for this?
+
+    def __repr__(self):
+        return f"<item_info: author='{self.author}', mapversion='{self.mapversion}', credits='{self.credits}', license='{self.license}', settings={self.settings}>"
 
 
 class ItemImage(Item):
     def __init__(self):
+        super().__init__()
+
         self._image = None
         self._name = None
         self._external = None
@@ -116,11 +146,14 @@ class ItemImage(Item):
 
 
 class ItemEnvelope(Item):
-    pass
+    def __init__(self):
+        super().__init__()
 
 
 class ItemLayer(Item):
     def __init__(self, detail: bool = False):
+        super().__init__()
+
         self.detail = detail
 
     @property
@@ -328,8 +361,9 @@ class ItemGroup(Item):
                  clip_width: int = 0,
                  clip_height: int = 0,
                  name: str = ''):
-        pass
+        super().__init__()
 
 
 class ItemSound(Item):
-    pass
+    def __init__(self):
+        super().__init__()

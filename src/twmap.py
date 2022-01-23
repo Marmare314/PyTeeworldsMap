@@ -11,26 +11,26 @@ class TWMap:
 
         self._item_manager.clear()
 
-        self._item_manager.insert_with_id(*data.item_version)
-        self._item_manager.insert_with_id(*data.item_info)
+        self._item_manager.add(data.item_version)
+        self._item_manager.add(data.item_info)
 
-        for image, i in data.item_images:
-            self._item_manager.insert_with_id(image, i)
+        for image in data.item_images:
+            self._item_manager.add(image)
 
-        for layer, i in data.item_layers:
-            self._item_manager.insert_with_id(layer, i)
+        for layer in data.item_layers:
+            self._item_manager.add(layer)
 
-        for group, i in data.item_groups:
-            self._item_manager.insert_with_id(group, i)
+        for group in data.item_groups:
+            self._item_manager.add(group)
 
     @property
     def info(self):
         return self._item_manager.info
 
-    @property
-    def groups(self):
-        # TODO: can items be modified through this?
-        return list(self._item_manager.groups.values())
+    # @property
+    # def groups(self):
+    #     # TODO: can items be modified through this?
+    #     return list(self._item_manager.groups.values())
 
     @property
     def game_layer(self):
@@ -39,8 +39,4 @@ class TWMap:
 
 m = TWMap()
 m.open('test_maps/HeyTux2.map')
-for x in range(m.game_layer.width):
-    for y in range(m.game_layer.height):
-        t = m.game_layer.tiles.get_tile(x, y).type
-        if t != 1:
-            print(t)
+print(m.info)

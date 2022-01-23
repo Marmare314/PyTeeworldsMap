@@ -1,4 +1,4 @@
-from structs import c_intstr3, c_rawstr4, c_int32, c_struct, c_uint16, c_i32_color
+from structs import c_intstr3, c_rawstr4, c_int32, c_struct, c_i32_color
 
 
 class CVersionHeader(c_struct):
@@ -23,8 +23,7 @@ class CItemType(c_struct):
 
 
 class CItemHeader(c_struct):
-    type_id: c_uint16
-    index: c_uint16
+    type_id_index: c_int32
     size: c_int32
 
 
