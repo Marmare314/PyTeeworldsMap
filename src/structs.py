@@ -62,6 +62,11 @@ class c_uint16(c_int_impl):
     _signed = False
 
 
+class c_uint8(c_int_impl):
+    _num_bytes = 1
+    _signed = False
+
+
 class c_str_impl(c_type):
     _length: int
 

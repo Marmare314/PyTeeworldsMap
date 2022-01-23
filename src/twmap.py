@@ -24,10 +24,19 @@ class TWMap:
             self._item_manager.insert_with_id(group, i)
 
     @property
+    def info(self):
+        return self._item_manager.info
+
+    @property
+    def groups(self):
+        # TODO: can items be modified through this?
+        return list(self._item_manager.groups.values())
+
+    @property
     def game_layer(self):
         return self._item_manager.game_layer
 
 
 m = TWMap()
 m.open('test_maps/HeyTux2.map')
-m.game_layer.get_tile(0, 0)
+print(m.game_layer.width * m.game_layer.height)

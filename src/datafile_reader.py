@@ -1,8 +1,8 @@
 from stringfile import StringFile
 from structs import c_int32
-from map_structs import CItemGroup, CItemLayer, CItemQuadLayer, CItemSoundLayer, CItemTileLayer, CVersionHeader, CHeaderV4, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage
-from items import ItemGroup, ItemImage, ItemVersion, ItemInfo, TileLayer
-from constants import EnumItemType, EnumLayerType, EnumTileLayerFlags
+from map_structs import CItemGroup, CItemLayer, CItemQuadLayer, CItemSoundLayer, CItemTileLayer, CTileVanilla, CVersionHeader, CHeaderV4, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage
+from items import ItemGroup, ItemImage, ItemVersion, ItemInfo, SpeedupTileLayer, SwitchTileLayer, TeleTileLayer, TuneTileLayer, VanillaTile, VanillaTileLayer
+from constants import EnumItemType, EnumLayerFlags, EnumLayerType, EnumTileFlag, EnumTileLayerFlags
 import zlib
 from PIL import Image
 
@@ -51,6 +51,22 @@ class DataFileReader:
 
     def _get_data_str_list(self, data_ptr: int):
         pass
+
+    def _get_data_tiles_vanilla(self, data_ptr: int, width: int, height: int):
+        tile_data = self._get_data(data_ptr)
+        tile_file = StringFile(tile_data)
+
+        tiles: list[list[VanillaTile]] = [[]]
+        for _ in range(height):
+            for _ in range(width):
+                raw_tile = CTileVanilla.from_data(tile_file)
+                tiles[-1].append(VanillaTile(
+                    raw_tile.id.value,
+                    {f for f in EnumTileFlag if f & raw_tile.flags.value > 0}
+                ))
+            tiles.append([])
+
+        return tiles
 
     def _get_type_start(self, type_id: EnumItemType):
         for item_type in self._item_types:
@@ -157,19 +173,50 @@ class DataFileReader:
 
             # TODO: check version
 
+            layer_flags = {f for f in EnumLayerFlags if item[0].flags.value & f}
+
             if isinstance(item[1], CItemTileLayer):
-                yield TileLayer(
-                    item[1].width.value,
-                    item[1].height.value,
-                    [f for f in EnumTileLayerFlags if item[1].flags.value & f],
+                flags = {f for f in EnumTileLayerFlags if item[1].flags.value & f}
+
+                layer_type = VanillaTileLayer
+                if EnumTileLayerFlags.TELE in flags:
+                    layer_type = TeleTileLayer
+                elif EnumTileLayerFlags.SPEEDUP in flags:
+                    layer_type = SpeedupTileLayer
+                elif EnumTileLayerFlags.SWITCH in flags:
+                    layer_type = SwitchTileLayer
+                elif EnumTileLayerFlags.TUNE in flags:
+                    layer_type = TuneTileLayer
+
+                width = item[1].width.value
+                height = item[1].height.value
+                layer = layer_type(
+                    width,
+                    height,
+                    flags,
                     item[1].color_envelope_ref.value,
                     item[1].image_ref.value,
                     item[1].color_envelope_offset.value,
                     item[1].color.value,
-                    item[0].flags.value == 1,
-                    item[1].name.value,
-                    self._get_data(item[1].data_ptr.value)
-                ), i
+                    layer_flags,
+                    item[1].name.value
+                )
+
+                if isinstance(layer, VanillaTileLayer):
+                    data_ptr = item[1].data_ptr.value
+                    if EnumTileLayerFlags.FRONT in flags:
+                        data_ptr = item[1].data_front_ptr.value
+                    layer.tiles = self._get_data_tiles_vanilla(data_ptr, width, height)
+                elif isinstance(layer, TeleTileLayer):
+                    pass
+                elif isinstance(layer, SpeedupTileLayer):
+                    pass
+                elif isinstance(layer, SwitchTileLayer):
+                    pass
+                else:
+                    pass
+
+                yield layer, i
             elif isinstance(item[1], CItemQuadLayer):
                 pass
             else:

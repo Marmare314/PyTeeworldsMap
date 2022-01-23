@@ -1,10 +1,8 @@
 from PIL import Image
-from typing import Optional, Type
+from typing import Optional
 
-from constants import EnumTileLayerFlags
+from constants import EnumLayerFlags, EnumTileFlag, EnumTileLayerFlags
 from structs import c_intstr3
-from map_structs import CTileVanilla
-from stringfile import StringFile
 
 ColorTuple = tuple[int, int, int, int]
 
@@ -55,12 +53,13 @@ class ItemManager:
         raise RuntimeError('ItemManager should always have a game layer')
 
 
+# TODO: implement
 class ItemReference:
     pass
 
 
 class Item:
-    pass
+    pass  # add some getter/setter for a reference to the itemmanager
 
 
 class ItemVersion(Item):
@@ -121,58 +120,78 @@ class ItemEnvelope(Item):
 
 
 class ItemLayer(Item):
-    def __init__(self, detail: bool = False):
-        self.detail = detail
+    def __init__(self, layer_flags: set[EnumLayerFlags] = {}):
+        self._layer_flags = layer_flags
 
     @property
     def game_layer(self) -> bool:
         return False
 
+    @property
+    def detail(self):
+        return EnumLayerFlags.DETAIL in self._layer_flags
+
+    @detail.setter
+    def detail(self, value: bool):
+        if value:
+            self._layer_flags.add(EnumLayerFlags.DETAIL)
+        else:
+            if self.detail:
+                self._layer_flags.remove(EnumLayerFlags.DETAIL)
+
 
 class Tile:
-    def __init__(self, x: int, y: int, tile_type: Type[CTileVanilla], data: StringFile):
+    pass
+
+
+class VanillaTile(Tile):
+    def __init__(self, id: int, flags: set[EnumTileFlag] = set()):
         pass
+
+
+class TeleTile(Tile):
+    pass
+
+
+class SpeedupTile(Tile):
+    pass
+
+
+class SwitchTile(Tile):
+    pass
+
+
+class TuneTile(Tile):
+    pass
 
 
 class TileLayer(ItemLayer):
     def __init__(self,
                  width: int,
                  height: int,
-                 flags: list[EnumTileLayerFlags] = [],
+                 flags: set[EnumTileLayerFlags] = set(),
                  color_envelope_ref: Optional[ItemEnvelope | int] = None,
                  image_ref: Optional[ItemImage | int] = None,
                  color_envelope_offset: int = 0,
                  color: ColorTuple = (0, 0, 0, 0),
-                 detail: bool = False,
-                 name: str = '',
-                 tile_data: Optional[bytes] = None):
+                 layer_flags: set[EnumLayerFlags] = set(),
+                 name: str = ''):
         self._width = width
         self._height = height
+        self._layer_flags = layer_flags
         self._flags = flags  # TODO: individual getters as in game_layer
 
         # TODO: getters/setters
         # self._color_envelope_ref = color_envelope_ref
         # self._image_ref = image_ref
 
+        self._color_envelope_offset = color_envelope_offset
         self.color = color
-        self.detail = detail
         self._name = name
 
-        if tile_data:
-            self._tile_data = StringFile(tile_data)
-        else:
-            # TODO: this is only vanilla case
-            self._tile_data = StringFile(bytes(width * height * 4))
+        self._tiles = None
 
         # TODO: resize
-        # TODO: how efficient is this for many tiles? -> maybe create a tile buffer region which only blits on demand
-
-    def get_tile(self, x: int, y: int):
-
-        tile_type = CTileVanilla
-        # if self.tele_layer -> CTileTele
-        # self._tile_data.seek(x * y * tile_type.size_bytes())
-        return Tile(x, y, tile_type, self._tile_data)
 
     @property
     def width(self):
@@ -186,6 +205,11 @@ class TileLayer(ItemLayer):
     def game_layer(self):
         return EnumTileLayerFlags.GAME in self._flags
 
+    @game_layer.setter
+    def game_layer(self, value: bool):
+        # TODO: make sure its not any other layer
+        pass  # TODO: make sure that there always exists exactly one
+
     @property
     def name(self):
         return self._name
@@ -194,6 +218,56 @@ class TileLayer(ItemLayer):
     def name(self, value: str):
         assert c_intstr3.fits_str(value)
         self._name = value
+
+
+class VanillaTileLayer(TileLayer):
+    @property
+    def tiles(self):
+        return self._tiles
+
+    @tiles.setter
+    def tiles(self, tiles: list[list[VanillaTile]]):
+        self._tiles = tiles
+
+
+class TeleTileLayer(TileLayer):
+    @property
+    def tiles(self):
+        return self._tiles
+
+    @tiles.setter
+    def tiles(self, tiles: list[list[TeleTile]]):
+        self._tiles = tiles
+
+
+class SpeedupTileLayer(TileLayer):
+    @property
+    def tiles(self):
+        return self._tiles
+
+    @tiles.setter
+    def tiles(self, tiles: list[list[SpeedupTile]]):
+        self._tiles = tiles
+
+
+class SwitchTileLayer(TileLayer):
+    @property
+    def tiles(self):
+        return self._tiles
+
+    @tiles.setter
+    def tiles(self, tiles: list[list[SwitchTile]]):
+        self._tiles = tiles
+
+
+class TuneTileLayer(TileLayer):
+    @property
+    def tiles(self):
+        return self._tiles
+
+    @tiles.setter
+    def tiles(self, tiles: list[list[TuneTile]]):
+        self._tiles = tiles
 
 
 class QuadLayer(ItemLayer):

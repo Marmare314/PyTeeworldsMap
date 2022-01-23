@@ -1,6 +1,9 @@
 from enum import IntEnum
 
 
+# TODO: rename
+
+
 class EnumItemType(IntEnum):
     VERSION = 0
     INFO = 1
@@ -26,6 +29,10 @@ class EnumLayerType(IntEnum):
     SOUNDS = 10
 
 
+class EnumLayerFlags(IntEnum):
+    DETAIL = 1
+
+
 class EnumTileLayerFlags(IntEnum):
     GAME = 1
     TELE = 2
@@ -42,3 +49,10 @@ class EnumCurveType(IntEnum):
     FAST = 3
     SMOOTH = 4
     BEZIER = 5  # envelope version 3 (vanilla)
+
+
+class EnumTileFlag(IntEnum):
+    VFLIP = 1
+    HFLIP = 2
+    OPAQUE = 4
+    ROTATE = 8

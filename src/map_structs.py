@@ -1,4 +1,4 @@
-from structs import c_intstr3, c_rawstr4, c_int32, c_struct, c_uint16, c_i32_color
+from structs import c_intstr3, c_rawstr4, c_int32, c_struct, c_uint16, c_i32_color, c_uint8
 
 
 class CVersionHeader(c_struct):
@@ -128,23 +128,35 @@ class CItemTileLayer(c_struct):
 
 
 class CTileVanilla(c_struct):
-    pass
+    id: c_uint8
+    flags: c_uint8
+    skip: c_uint8
+    _unused: c_uint8
 
 
 class CTileTele(c_struct):
-    pass
+    number: c_uint8
+    id: c_uint8
 
 
 class CTileSpeedup(c_struct):
-    pass
+    force: c_uint8
+    max_speed: c_uint8
+    id: c_uint8
+    _unused: c_uint8
+    angle: c_uint16  # TODO: this might be signed
 
 
 class CTileSwitch(c_struct):
-    pass
+    number: c_uint8
+    id: c_uint8
+    flags: c_uint8
+    delay: c_uint8
 
 
 class CTileTune(c_struct):
-    pass
+    number: c_uint8
+    id: c_uint8
 
 
 class CItemQuadLayer(c_struct):
