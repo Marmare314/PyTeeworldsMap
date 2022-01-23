@@ -1,5 +1,7 @@
+# pyright: reportPrivateUsage=false
+
 from datafile_reader import DataFileReader
-from items import ItemManager
+from items import ItemLayer, ItemManager
 
 
 class TWMap:
@@ -18,19 +20,20 @@ class TWMap:
             self._item_manager.add(image)
 
         for layer in data.item_layers:
+            layer._set_references_import(self._item_manager)
             self._item_manager.add(layer)
 
         for group in data.item_groups:
+            group._set_references_import(self._item_manager)
             self._item_manager.add(group)
 
     @property
     def info(self):
         return self._item_manager.info
 
-    # @property
-    # def groups(self):
-    #     # TODO: can items be modified through this?
-    #     return list(self._item_manager.groups.values())
+    @property
+    def groups(self):
+        return list(self._item_manager.groups)
 
     @property
     def game_layer(self):
@@ -40,3 +43,5 @@ class TWMap:
 m = TWMap()
 m.open('test_maps/HeyTux2.map')
 print(m.info)
+for g in m.groups:
+    print(g._name, g.layers)

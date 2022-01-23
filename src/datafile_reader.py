@@ -1,11 +1,13 @@
+# pyright: reportPrivateUsage=false
+
 from stringfile import StringFile
 from structs import c_int32
 from map_structs import CItemGroup, CItemLayer, CItemQuadLayer, CItemSoundLayer, CItemTileLayer, CVersionHeader, CHeaderV4, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage
-from items import ItemGroup, ItemImage, ItemVersion, ItemInfo, SpeedupTileLayer, SwitchTileLayer, TeleTileLayer, TuneTileLayer, VanillaTileLayer
+from items import ItemEnvelope, ItemGroup, ItemImage, ItemLayer, ItemVersion, ItemInfo, SpeedupTileLayer, SwitchTileLayer, TeleTileLayer, TuneTileLayer, VanillaTileLayer
 from constants import EnumItemType, EnumLayerFlags, EnumLayerType, EnumTileLayerFlags
 import zlib
 from PIL import Image
-from typing import TypeVar
+from typing import Optional, TypeVar
 
 from tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileManager, TuneTileManager, VanillaTileManager
 
@@ -204,13 +206,23 @@ class DataFileReader:
         elif is_tune:
             layer_type = TuneTileLayer
 
+        env_ref: Optional[ItemEnvelope] = None
+        env_ref_id = item_data.color_envelope_ref.value
+        if env_ref_id > 0:
+            env_ref = self._set_id(ItemEnvelope(), env_ref_id)
+
+        image_ref: Optional[ItemImage] = None
+        image_ref_id = item_data.image_ref.value
+        if image_ref_id > 0:
+            image_ref = self._set_id(ItemImage(), image_ref_id)
+
         width = item_data.width.value
         height = item_data.height.value
         layer = layer_type(
             width,
             height,
-            item_data.color_envelope_ref.value,
-            item_data.image_ref.value,
+            env_ref,
+            image_ref,
             item_data.color_envelope_offset.value,
             item_data.color.value,
             detail,
@@ -290,8 +302,13 @@ class DataFileReader:
             if item.version.value != 3:
                 raise RuntimeError('unexpected tilelayer version')
 
+            layer_refs: list[ItemLayer] = []
+            for i in range(item.num_layers.value):
+                ref = self._set_id(ItemLayer(), item.start_layer.value + i)
+                layer_refs.append(ref)
+
             yield self._set_id(ItemGroup(
-                [item.start_layer.value + i for i in range(item.num_layers.value)],
+                layer_refs,
                 item.x_offset.value,
                 item.y_offset.value,
                 item.x_parallax.value,

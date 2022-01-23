@@ -1,8 +1,12 @@
+# pyright: reportPrivateUsage=false
+
 from PIL import Image
-from typing import Optional
+from typing import Optional, Type
+from itertools import count, filterfalse
 
 from structs import c_intstr3
 from tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileManager, TileManager, TuneTileManager, VanillaTileManager
+
 
 ColorTuple = tuple[int, int, int, int]
 
@@ -21,22 +25,48 @@ class ItemManager:
         self.add(info)
         self.add(game_group)
 
-    def find_item(self, id: int):
-        pass  # TODO
+    def find_item(self, item_type: 'Type[Item]', id: int):
+        for item in self._item_set:
+            if item._item_id == id and isinstance(item, item_type):
+                return item
+
+    def _get_ids_type(self, item_type: 'Type[Item]'):
+        ids: set[int] = set()
+        for item in self._item_set:
+            if type(item) == item_type:
+                ids.add(item._item_id)
+        return ids
+
+    def _next_free_id(self, item_type: 'Type[Item]'):
+        ids = self._get_ids_type(item_type)
+        return next(filterfalse(set(ids).__contains__, count(0)))
 
     def _generate_id(self, item: 'Item'):
-        pass  # TODO
+        new_id = self._next_free_id(type(item))
+        item._item_id = new_id
+
+    def minimize_ids(self):
+        pass
 
     def add(self, item: 'Item'):
-        if item._has_id:  # type: ignore
-            item_id: int = item._item_id  # type: ignore
-            stored_item = self.find_item(item_id)
+        if item._has_manager:
+            if item._item_manager != self:
+                pass  # copy item and that one instead
+        else:
+            item._item_manager = self
+
+        if item._has_id:
+            item_id: int = item._item_id
+            stored_item = self.find_item(type(item), item_id)
             if stored_item:
                 self._item_set.remove(stored_item)
             self._item_set.add(item)
         else:
             self._generate_id(item)
             self._item_set.add(item)
+
+        item._add_references()
+        item._validate_references()
 
     def clear(self):
         self._item_set = set()
@@ -49,14 +79,20 @@ class ItemManager:
         raise RuntimeError('ItemManager should always have an info item')
 
     @property
-    def layers(self):
+    def _layers(self):
         for item in self._item_set:
             if isinstance(item, ItemLayer):
                 yield item
 
     @property
+    def groups(self):
+        for item in self._item_set:
+            if isinstance(item, ItemGroup):
+                yield item
+
+    @property
     def game_layer(self) -> 'VanillaTileLayer':
-        for layer in self.layers:
+        for layer in self._layers:
             if not isinstance(layer, VanillaTileLayer):
                 raise RuntimeError('game_layer has unexpected type')
             return layer
@@ -66,6 +102,7 @@ class ItemManager:
 class Item:
     def __init__(self):
         self._has_id = False
+        self._has_manager = False
 
     @property
     def _item_id(self):
@@ -82,7 +119,38 @@ class Item:
 
     @_item_manager.setter
     def _item_manager(self, value: ItemManager):
+        self._has_manager = True
         self.__item_manager = value
+
+    def _expect_manager(self):
+        if not self._has_manager:
+            raise RuntimeError('expected item to have a manager')
+
+    def _expect_id(self):
+        if not self._has_id:
+            raise RuntimeError('expected item to have an id')
+
+    def _validate_ref(self, item: 'Item'):
+        self._expect_manager()
+        item._expect_manager()
+        item._expect_id()
+        if self._item_manager != item._item_manager:
+            raise ValueError('items should be managed by the same manager')
+        if self._item_manager.find_item(type(item), item.__item_id) is None:
+            raise ValueError('Referenced item not valid')
+
+    def _add_ref(self, item: 'Item'):
+        self._expect_manager()
+        self._item_manager.add(item)
+
+    def _validate_references(self):
+        pass
+
+    def _add_references(self):
+        pass
+
+    def _set_references_import(self, manager: ItemManager):
+        self._item_manager = manager
 
 
 class ItemVersion(Item):
@@ -108,7 +176,7 @@ class ItemInfo(Item):
         self.settings = settings  # TODO: a nicer interface for this?
 
     def __repr__(self):
-        return f"<item_info: author='{self.author}', mapversion='{self.mapversion}', credits='{self.credits}', license='{self.license}', settings={self.settings}>"
+        return f"<item_info>"
 
 
 class ItemImage(Item):
@@ -165,8 +233,8 @@ class TileLayer(ItemLayer):
     def __init__(self,
                  width: int,
                  height: int,
-                 color_envelope_ref: Optional[ItemEnvelope | int] = None,
-                 image_ref: Optional[ItemImage | int] = None,
+                 color_envelope_ref: Optional[ItemEnvelope] = None,
+                 image_ref: Optional[ItemImage] = None,
                  color_envelope_offset: int = 0,
                  color: ColorTuple = (0, 0, 0, 0),
                  detail: bool = False,
@@ -187,9 +255,9 @@ class TileLayer(ItemLayer):
         self.is_switch = is_switch
         self.is_tune = is_tune
 
-        # TODO: getters/setters
-        # self._color_envelope_ref = color_envelope_ref
-        # self._image_ref = image_ref
+        # TODO: setters/getters
+        self._color_envelope_ref = color_envelope_ref
+        self._image_ref = image_ref
 
         self._color_envelope_offset = color_envelope_offset
         self.color = color
@@ -205,6 +273,46 @@ class TileLayer(ItemLayer):
         self._is_front = False
         self._is_switch = False
         self._is_tune = False
+
+    @property
+    def color_envelope(self):
+        return self._color_envelope_ref
+
+    @color_envelope.setter
+    def color_envelope(self, item: ItemEnvelope):
+        self._validate_ref(item)
+        self._color_envelope_ref = item
+
+    @property
+    def image(self):
+        self._image_ref
+
+    @image.setter
+    def image(self, item: ItemImage):
+        self._validate_ref(item)
+        self._image_ref = item
+
+    def _add_references(self):
+        if self._image_ref:
+            self._add_ref(self._image_ref)
+        if self._color_envelope_ref:
+            self._add_ref(self._color_envelope_ref)
+
+    def _validate_references(self):
+        if self._image_ref:
+            self._validate_ref(self._image_ref)
+        if self._color_envelope_ref:
+            self._validate_ref(self._color_envelope_ref)
+
+    def _set_references_import(self, manager: ItemManager):
+        super()._set_references_import(manager)
+
+        self._expect_manager()
+
+        if self._image_ref:
+            self._image_ref = self._item_manager.find_item(ItemImage, self._image_ref._item_id)
+        if self._color_envelope_ref:
+            self._color_envelope_ref = self._item_manager.find_item(ItemImage, self._color_envelope_ref._item_id)
 
     @property
     def width(self):
@@ -289,6 +397,9 @@ class TileLayer(ItemLayer):
         assert c_intstr3.fits_str(value)
         self._name = value
 
+    def __repr__(self):
+        return f'<tile_layer: {self.name}>'
+
 
 class VanillaTileLayer(TileLayer):
     @property
@@ -350,7 +461,7 @@ class SoundLayer(ItemLayer):
 
 class ItemGroup(Item):
     def __init__(self,
-                 layers: list[ItemLayer] | list[int],
+                 layers: list[ItemLayer],
                  x_offset: int = 0,
                  y_offset: int = 0,
                  x_parallax: int = 0,
@@ -362,6 +473,47 @@ class ItemGroup(Item):
                  clip_height: int = 0,
                  name: str = ''):
         super().__init__()
+
+        self._layers = layers
+        self._x_offset = x_offset
+        self._y_offset = y_offset
+        self._x_parallax = x_parallax
+        self._y_parallax = y_parallax
+        self.clipping = clipping
+        self._clip_x = clip_x
+        self._clip_y = clip_y
+        self._clip_width = clip_width
+        self._clip_height = clip_height
+        self._name = name
+
+    def _add_references(self):
+        for layer in self._layers:
+            self._add_ref(layer)
+
+    def _validate_references(self):
+        for layer in self._layers:
+            self._validate_ref(layer)
+
+    def _set_references_import(self, manager: ItemManager):
+        super()._set_references_import(manager)
+
+        self._expect_manager()
+
+        new_layers: list[Item] = []
+        for layer in self._layers:
+            new_layer = self._item_manager.find_item(ItemLayer, layer._item_id)
+            if new_layer:
+                new_layers.append(new_layer)
+            else:
+                raise RuntimeError('invalid reference on import')
+        self._layers = new_layers
+
+    @property
+    def layers(self):
+        return self._layers
+
+    def __repr__(self):
+        return f'<Group: {self._name}>'  # TODO: use getter
 
 
 class ItemSound(Item):
