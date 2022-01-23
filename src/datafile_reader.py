@@ -1,10 +1,13 @@
+import multiprocessing
 from stringfile import StringFile
 from structs import c_int32
-from map_structs import CItemGroup, CItemLayer, CItemQuadLayer, CItemSoundLayer, CItemTileLayer, CTileVanilla, CVersionHeader, CHeaderV4, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage
-from items import ItemGroup, ItemImage, ItemVersion, ItemInfo, SpeedupTileLayer, SwitchTileLayer, TeleTileLayer, TuneTileLayer, VanillaTile, VanillaTileLayer
-from constants import EnumItemType, EnumLayerFlags, EnumLayerType, EnumTileFlag, EnumTileLayerFlags
+from map_structs import CItemGroup, CItemLayer, CItemQuadLayer, CItemSoundLayer, CItemTileLayer, CVersionHeader, CHeaderV4, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage
+from items import ItemGroup, ItemImage, ItemVersion, ItemInfo, SpeedupTileLayer, SwitchTileLayer, TeleTileLayer, TuneTileLayer, VanillaTileLayer
+from constants import EnumItemType, EnumLayerFlags, EnumLayerType, EnumTileLayerFlags
 import zlib
 from PIL import Image
+
+from tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileManager, TuneTileManager, VanillaTileManager
 
 
 class DataFileReader:
@@ -51,22 +54,6 @@ class DataFileReader:
 
     def _get_data_str_list(self, data_ptr: int):
         pass
-
-    def _get_data_tiles_vanilla(self, data_ptr: int, width: int, height: int):
-        tile_data = self._get_data(data_ptr)
-        tile_file = StringFile(tile_data)
-
-        tiles: list[list[VanillaTile]] = [[]]
-        for _ in range(height):
-            for _ in range(width):
-                raw_tile = CTileVanilla.from_data(tile_file)
-                tiles[-1].append(VanillaTile(
-                    raw_tile.id.value,
-                    {f for f in EnumTileFlag if f & raw_tile.flags.value > 0}
-                ))
-            tiles.append([])
-
-        return tiles
 
     def _get_type_start(self, type_id: EnumItemType):
         for item_type in self._item_types:
@@ -162,65 +149,73 @@ class DataFileReader:
 
             yield image, i
 
+    def _get_item_layer(self, index: int):
+        _, item = self._get_item(EnumItemType.LAYER, index)
+        if not isinstance(item, tuple):
+            raise RuntimeError('unexpected item returned')
+        if not isinstance(item[0], CItemLayer):
+            raise RuntimeError('unexpected item returned')
+
+        # TODO: check version
+
+        layer_flags = {f for f in EnumLayerFlags if item[0].flags.value & f}
+
+        if isinstance(item[1], CItemTileLayer):
+            flags = {f for f in EnumTileLayerFlags if item[1].flags.value & f}
+
+            layer_type = VanillaTileLayer
+            if EnumTileLayerFlags.TELE in flags:
+                layer_type = TeleTileLayer
+            elif EnumTileLayerFlags.SPEEDUP in flags:
+                layer_type = SpeedupTileLayer
+            elif EnumTileLayerFlags.SWITCH in flags:
+                layer_type = SwitchTileLayer
+            elif EnumTileLayerFlags.TUNE in flags:
+                layer_type = TuneTileLayer
+
+            width = item[1].width.value
+            height = item[1].height.value
+            layer = layer_type(
+                width,
+                height,
+                flags,
+                item[1].color_envelope_ref.value,
+                item[1].image_ref.value,
+                item[1].color_envelope_offset.value,
+                item[1].color.value,
+                layer_flags,
+                item[1].name.value
+            )
+
+            if isinstance(layer, VanillaTileLayer):
+                data_ptr = item[1].data_ptr.value
+                if EnumTileLayerFlags.FRONT in flags:
+                    data_ptr = item[1].data_front_ptr.value
+                layer.tiles = VanillaTileManager(width, height, self._get_data(data_ptr))
+            elif isinstance(layer, TeleTileLayer):
+                data_ptr = item[1].data_tele_ptr.value
+                layer.tiles = TeleTileManager(width, height, self._get_data(data_ptr))
+            elif isinstance(layer, SpeedupTileLayer):
+                data_ptr = item[1].data_speedup_ptr.value
+                layer.tiles = SpeedupTileManager(width, height, self._get_data(data_ptr))
+            elif isinstance(layer, SwitchTileLayer):
+                data_ptr = item[1].data_switch_ptr.value
+                layer.tiles = SwitchTileManager(width, height, self._get_data(data_ptr))
+            else:
+                data_ptr = item[1].data_tune_ptr.value
+                layer.tiles = TuneTileManager(width, height, self._get_data(data_ptr))
+
+            return layer, index
+        elif isinstance(item[1], CItemQuadLayer):
+            return VanillaTileLayer(1, 1), 0
+        else:
+            raise NotImplementedError()
+
     @property
     def item_layers(self):
-        for i in range(self._get_num_items(EnumItemType.LAYER)):
-            _, item = self._get_item(EnumItemType.LAYER, i)
-            if not isinstance(item, tuple):
-                raise RuntimeError('unexpected item returned')
-            if not isinstance(item[0], CItemLayer):
-                raise RuntimeError('unexpected item returned')
-
-            # TODO: check version
-
-            layer_flags = {f for f in EnumLayerFlags if item[0].flags.value & f}
-
-            if isinstance(item[1], CItemTileLayer):
-                flags = {f for f in EnumTileLayerFlags if item[1].flags.value & f}
-
-                layer_type = VanillaTileLayer
-                if EnumTileLayerFlags.TELE in flags:
-                    layer_type = TeleTileLayer
-                elif EnumTileLayerFlags.SPEEDUP in flags:
-                    layer_type = SpeedupTileLayer
-                elif EnumTileLayerFlags.SWITCH in flags:
-                    layer_type = SwitchTileLayer
-                elif EnumTileLayerFlags.TUNE in flags:
-                    layer_type = TuneTileLayer
-
-                width = item[1].width.value
-                height = item[1].height.value
-                layer = layer_type(
-                    width,
-                    height,
-                    flags,
-                    item[1].color_envelope_ref.value,
-                    item[1].image_ref.value,
-                    item[1].color_envelope_offset.value,
-                    item[1].color.value,
-                    layer_flags,
-                    item[1].name.value
-                )
-
-                if isinstance(layer, VanillaTileLayer):
-                    data_ptr = item[1].data_ptr.value
-                    if EnumTileLayerFlags.FRONT in flags:
-                        data_ptr = item[1].data_front_ptr.value
-                    layer.tiles = self._get_data_tiles_vanilla(data_ptr, width, height)
-                elif isinstance(layer, TeleTileLayer):
-                    pass
-                elif isinstance(layer, SpeedupTileLayer):
-                    pass
-                elif isinstance(layer, SwitchTileLayer):
-                    pass
-                else:
-                    pass
-
-                yield layer, i
-            elif isinstance(item[1], CItemQuadLayer):
-                pass
-            else:
-                raise NotImplementedError()
+        with multiprocessing.Pool() as pool:
+            for res in pool.map(self._get_item_layer, range(self._get_num_items(EnumItemType.LAYER))):
+                yield res
 
     @property
     def item_groups(self):

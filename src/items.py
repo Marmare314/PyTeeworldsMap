@@ -1,8 +1,9 @@
 from PIL import Image
 from typing import Optional
 
-from constants import EnumLayerFlags, EnumTileFlag, EnumTileLayerFlags
+from constants import EnumLayerFlags, EnumTileLayerFlags
 from structs import c_intstr3
+from tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileManager, TuneTileManager, VanillaTileManager
 
 ColorTuple = tuple[int, int, int, int]
 
@@ -120,7 +121,7 @@ class ItemEnvelope(Item):
 
 
 class ItemLayer(Item):
-    def __init__(self, layer_flags: set[EnumLayerFlags] = {}):
+    def __init__(self, layer_flags: set[EnumLayerFlags] = set()):
         self._layer_flags = layer_flags
 
     @property
@@ -138,31 +139,6 @@ class ItemLayer(Item):
         else:
             if self.detail:
                 self._layer_flags.remove(EnumLayerFlags.DETAIL)
-
-
-class Tile:
-    pass
-
-
-class VanillaTile(Tile):
-    def __init__(self, id: int, flags: set[EnumTileFlag] = set()):
-        pass
-
-
-class TeleTile(Tile):
-    pass
-
-
-class SpeedupTile(Tile):
-    pass
-
-
-class SwitchTile(Tile):
-    pass
-
-
-class TuneTile(Tile):
-    pass
 
 
 class TileLayer(ItemLayer):
@@ -226,7 +202,7 @@ class VanillaTileLayer(TileLayer):
         return self._tiles
 
     @tiles.setter
-    def tiles(self, tiles: list[list[VanillaTile]]):
+    def tiles(self, tiles: VanillaTileManager):
         self._tiles = tiles
 
 
@@ -236,7 +212,7 @@ class TeleTileLayer(TileLayer):
         return self._tiles
 
     @tiles.setter
-    def tiles(self, tiles: list[list[TeleTile]]):
+    def tiles(self, tiles: TeleTileManager):
         self._tiles = tiles
 
 
@@ -246,7 +222,7 @@ class SpeedupTileLayer(TileLayer):
         return self._tiles
 
     @tiles.setter
-    def tiles(self, tiles: list[list[SpeedupTile]]):
+    def tiles(self, tiles: SpeedupTileManager):
         self._tiles = tiles
 
 
@@ -256,7 +232,7 @@ class SwitchTileLayer(TileLayer):
         return self._tiles
 
     @tiles.setter
-    def tiles(self, tiles: list[list[SwitchTile]]):
+    def tiles(self, tiles: SwitchTileManager):
         self._tiles = tiles
 
 
@@ -266,7 +242,7 @@ class TuneTileLayer(TileLayer):
         return self._tiles
 
     @tiles.setter
-    def tiles(self, tiles: list[list[TuneTile]]):
+    def tiles(self, tiles: TuneTileManager):
         self._tiles = tiles
 
 
