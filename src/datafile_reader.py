@@ -1,4 +1,3 @@
-import multiprocessing
 from stringfile import StringFile
 from structs import c_int32
 from map_structs import CItemGroup, CItemLayer, CItemQuadLayer, CItemSoundLayer, CItemTileLayer, CVersionHeader, CHeaderV4, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage
@@ -158,19 +157,25 @@ class DataFileReader:
 
         # TODO: check version
 
-        layer_flags = {f for f in EnumLayerFlags if item[0].flags.value & f}
+        detail = EnumLayerFlags.DETAIL & item[0].flags.value > 0
 
         if isinstance(item[1], CItemTileLayer):
-            flags = {f for f in EnumTileLayerFlags if item[1].flags.value & f}
+            flags = item[1].flags.value
+            is_game = EnumTileLayerFlags.GAME & flags > 0
+            is_tele = EnumTileLayerFlags.TELE & flags > 0
+            is_speedup = EnumTileLayerFlags.SPEEDUP & flags > 0
+            is_front = EnumTileLayerFlags.FRONT & flags > 0
+            is_switch = EnumTileLayerFlags.SWITCH & flags > 0
+            is_tune = EnumTileLayerFlags.TUNE & flags > 0
 
             layer_type = VanillaTileLayer
-            if EnumTileLayerFlags.TELE in flags:
+            if is_tele:
                 layer_type = TeleTileLayer
-            elif EnumTileLayerFlags.SPEEDUP in flags:
+            elif is_speedup:
                 layer_type = SpeedupTileLayer
-            elif EnumTileLayerFlags.SWITCH in flags:
+            elif is_switch:
                 layer_type = SwitchTileLayer
-            elif EnumTileLayerFlags.TUNE in flags:
+            elif is_tune:
                 layer_type = TuneTileLayer
 
             width = item[1].width.value
@@ -178,20 +183,25 @@ class DataFileReader:
             layer = layer_type(
                 width,
                 height,
-                flags,
                 item[1].color_envelope_ref.value,
                 item[1].image_ref.value,
                 item[1].color_envelope_offset.value,
                 item[1].color.value,
-                layer_flags,
+                detail,
+                is_game,
+                is_tele,
+                is_speedup,
+                is_front,
+                is_switch,
+                is_tune,
                 item[1].name.value
             )
 
             if isinstance(layer, VanillaTileLayer):
                 data_ptr = item[1].data_ptr.value
-                if EnumTileLayerFlags.FRONT in flags:
+                if is_front:
                     data_ptr = item[1].data_front_ptr.value
-                layer.tiles = VanillaTileManager(width, height, self._get_data(data_ptr))
+                layer.tiles = VanillaTileManager(width, height, is_front | is_game, self._get_data(data_ptr))
             elif isinstance(layer, TeleTileLayer):
                 data_ptr = item[1].data_tele_ptr.value
                 layer.tiles = TeleTileManager(width, height, self._get_data(data_ptr))
@@ -213,9 +223,8 @@ class DataFileReader:
 
     @property
     def item_layers(self):
-        with multiprocessing.Pool() as pool:
-            for res in pool.map(self._get_item_layer, range(self._get_num_items(EnumItemType.LAYER))):
-                yield res
+        for i in range(self._get_num_items(EnumItemType.LAYER)):
+            yield self._get_item_layer(i)
 
     @property
     def item_groups(self):

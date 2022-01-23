@@ -39,4 +39,8 @@ class TWMap:
 
 m = TWMap()
 m.open('test_maps/HeyTux2.map')
-print(m.game_layer.width * m.game_layer.height)
+for x in range(m.game_layer.width):
+    for y in range(m.game_layer.height):
+        t = m.game_layer.tiles.get_tile(x, y).type
+        if t != 1:
+            print(t)
