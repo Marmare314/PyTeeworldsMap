@@ -1,23 +1,21 @@
-# pyright: reportPrivateUsage=false
-
 from stringfile import StringFile
 from structs import c_int32
-from map_structs import CItemGroup, CItemLayer, CItemQuadLayer, CItemSoundLayer, CItemTileLayer, CVersionHeader, CHeaderV4, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage
-from items import ItemEnvelope, ItemGroup, ItemImage, ItemLayer, ItemVersion, ItemInfo, SpeedupTileLayer, SwitchTileLayer, TeleTileLayer, TuneTileLayer, VanillaTileLayer
+from map_structs import CItemEnvelope, CItemGroup, CItemLayer, CItemQuadLayer, CItemSound, CItemSoundLayer, CItemTileLayer, CVersionHeader, CHeaderV4, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage, c_struct
+from items import ItemEnvelope, ItemGroup, ItemImage, ItemImageExternal, ItemImageInternal, ItemLayer, ItemManager, ItemVersion, ItemInfo, SpeedupTileLayer, SwitchTileLayer, TeleTileLayer, TuneTileLayer, VanillaTileLayer
 from constants import EnumItemType, EnumLayerFlags, EnumLayerType, EnumTileLayerFlags
 import zlib
 from PIL import Image
-from typing import Optional, TypeVar
+from typing import Optional, Type, TypeVar
 
 from tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileManager, TuneTileManager, VanillaTileManager
 
-
-T = TypeVar('T')
+T = TypeVar('T', bound=c_struct)
 
 
 class DataFileReader:
-    def __init__(self, file_data: bytes):
+    def __init__(self, file_data: bytes, manager: ItemManager):
         self._data = StringFile(file_data)
+        self._item_manager = manager
 
         self._ver_header = CVersionHeader.from_data(self._data)
         if self._ver_header.magic.value not in ['DATA', 'ATAD']:
@@ -54,140 +52,141 @@ class DataFileReader:
         return zlib.decompress(self._data.read(num_bytes))
 
     def _get_data_str(self, data_ptr: int):
+        if data_ptr < 0:
+            return ''
         return self._get_data(data_ptr)[:-1].decode('utf8')
 
-    def _get_data_str_list(self, data_ptr: int):
+    def _get_data_str_list(self, data_ptr: int) -> list[str]:
+        if data_ptr < 0:
+            return []
         return [s.decode('utf8') for s in self._get_data(data_ptr).split(b'\0')[:-1]]
 
-    def _get_type_start(self, type_id: EnumItemType):
-        for item_type in self._item_types:
-            if item_type.type_id.value == type_id:
-                return item_type.start.value
-        raise RuntimeError('type_id not found')
+    def _get_typeid(self, item_type: 'Type[c_struct]'):
+        if item_type == CItemVersion:
+            return EnumItemType.VERSION
+        elif item_type == CItemInfo:
+            return EnumItemType.INFO
+        elif item_type == CItemImage:
+            return EnumItemType.IMAGE
+        elif item_type == CItemEnvelope:
+            return EnumItemType.ENVELOPE
+        elif item_type == CItemGroup:
+            return EnumItemType.GROUP
+        elif item_type in [CItemLayer, CItemTileLayer, CItemQuadLayer, CItemSoundLayer]:
+            return EnumItemType.LAYER
+        elif item_type == CItemSound:
+            return EnumItemType.SOUND
 
-    def _get_num_items(self, type_id: EnumItemType):
-        for item_type in self._item_types:
-            if item_type.type_id.value == type_id:
-                return item_type.num.value
+    def _get_type_start(self, item_type: 'Type[c_struct]'):
+        for c_item in self._item_types:
+            if c_item.type_id.value == self._get_typeid(item_type):
+                return c_item.start.value
+
+    def _get_num_items(self, item_type: 'Type[c_struct]'):
+        for c_item in self._item_types:
+            if c_item.type_id.value == self._get_typeid(item_type):
+                return c_item.num.value
         return 0
 
-    def _get_item(self, type_id: EnumItemType, index: int):
-        self._data.seek(self._items_start + self._item_offsets[self._get_type_start(type_id) + index])
+    def _validate_item_header(self, index: int, item_type: Type[c_struct]):
+        if item_type == CItemLayer:
+            CItemHeader.from_data(self._data)
+            return  # this item will be checked on the second part
+
+        size = item_type.size_bytes()
+        if item_type in [CItemTileLayer, CItemQuadLayer, CItemSoundLayer]:
+            size += CItemLayer.size_bytes()
 
         header = CItemHeader.from_data(self._data)
-        assert header.type_id_index.value & 0xffff == index
-        assert (header.type_id_index.value >> 16) & 0xffff == type_id
+        if (header.type_id_index.value & 0xffff) != index:
+            raise RuntimeError('index of item is not as expected')
+        if (header.type_id_index.value >> 16) & 0xffff != self._get_typeid(item_type):
+            raise RuntimeError('type_id of item is not as expected')
+        if header.size.value != size:
+            raise RuntimeError('size of item_data is not as expected')
 
-        if type_id == EnumItemType.VERSION:
-            assert header.size.value == CItemVersion.size_bytes()
-            return CItemVersion.from_data(self._data)
-        elif type_id == EnumItemType.INFO:
-            assert header.size.value == CItemInfo.size_bytes()
-            return CItemInfo.from_data(self._data)
-        elif type_id == EnumItemType.IMAGE:
-            assert header.size.value == CItemImage.size_bytes()
-            return CItemImage.from_data(self._data)
-        elif type_id == EnumItemType.LAYER:
-            layer_header = CItemLayer.from_data(self._data)
-            if layer_header.type.value == EnumLayerType.TILES:
-                assert header.size.value == CItemLayer.size_bytes() + CItemTileLayer.size_bytes()
-                return layer_header, CItemTileLayer.from_data(self._data)
-            elif layer_header.type.value == EnumLayerType.QUADS:
-                # TODO: enable when implemented
-                # assert header.size.value == CItemLayer.size_bytes() + CItemQuadLayer.size_bytes()
-                return layer_header, CItemQuadLayer.from_data(self._data)
-            elif layer_header.type.value == EnumLayerType.SOUNDS:
-                assert header.size.value == CItemLayer.size_bytes() + CItemSoundLayer.size_bytes()
-                return layer_header, CItemSoundLayer.from_data(self._data)
-            else:
-                raise RuntimeError('layer type not recognized')
-        elif type_id == EnumItemType.GROUP:
-            assert header.size.value == CItemGroup.size_bytes()
-            return CItemGroup.from_data(self._data)
-        raise RuntimeError('type_id not known')
+    def _get_item(self, item_type: Type[T], index: int) -> T:
+        start = self._get_type_start(item_type)
+        if start is None:
+            raise RuntimeError('item should not have been requested')
 
-    @staticmethod
-    def _set_id(item: T, id: int) -> T:
-        item._item_id = id  # type: ignore
-        return item
+        self._data.seek(self._items_start + self._item_offsets[start + index])
+        self._validate_item_header(index, item_type)
 
-    @property
-    def item_version(self):
-        item = self._get_item(EnumItemType.VERSION, 0)
-        if not isinstance(item, CItemVersion):
-            raise RuntimeError('unexpected item returned')
+        if item_type in [CItemTileLayer, CItemQuadLayer, CItemSoundLayer]:
+            CItemLayer.from_data(self._data)  # this has already been read
+
+        return item_type.from_data(self._data)
+
+    def add_version(self):
+        item = self._get_item(CItemVersion, 0)
 
         if item.version.value != 1:
             raise RuntimeError('unsupported ItemVersion version')
 
-        ret_item = ItemVersion(item.version.value)
-        return self._set_id(ret_item, 0)
+        ItemVersion(
+            manager=self._item_manager,
+            version=item.version.value,
+            _id=0
+        )
 
-    @property
-    def item_info(self):
-        item = self._get_item(EnumItemType.INFO, 0)
-        if not isinstance(item, CItemInfo):
-            raise RuntimeError('unexpected item returned')
+    def add_info(self):
+        item = self._get_item(CItemInfo, 0)
 
         if item.version.value != 1:
             raise RuntimeError('unsupported ItemInfo version')
 
-        author = ''
-        mapversion = ''
-        credits = ''
-        license = ''
-        settings: list[str] = []
+        author = self._get_data_str(item.author_ptr.value)
+        mapversion = self._get_data_str(item.map_version_ptr.value)
+        credits = self._get_data_str(item.credits_ptr.value)
+        license = self._get_data_str(item.license_ptr.value)
+        settings: list[str] = self._get_data_str_list(item.settings_ptr.value)
 
-        if item.author_ptr.value >= 0:
-            author = self._get_data_str(item.author_ptr.value)
-        if item.map_version_ptr.value >= 0:
-            mapversion = self._get_data_str(item.map_version_ptr.value)
-        if item.credits_ptr.value >= 0:
-            credits = self._get_data_str(item.credits_ptr.value)
-        if item.license_ptr.value >= 0:
-            license = self._get_data_str(item.license_ptr.value)
-        if item.settings_ptr.value >= 0:
-            settings = self._get_data_str_list(item.settings_ptr.value)
+        ItemInfo(
+            manager=self._item_manager,
+            author=author,
+            mapversion=mapversion,
+            credits=credits,
+            license=license,
+            settings=settings,
+            _id=0
+        )
 
-        ret_item = ItemInfo(author, mapversion, credits, license, settings)
-        return self._set_id(ret_item, 0)
-
-    @property
-    def item_images(self):
-        for i in range(self._get_num_items(EnumItemType.IMAGE)):
-            item = self._get_item(EnumItemType.IMAGE, i)
-            if not isinstance(item, CItemImage):
-                raise RuntimeError('unexpected item returned')
+    def add_images(self):
+        for i in range(self._get_num_items(CItemImage)):
+            item = self._get_item(CItemImage, i)
 
             if item.version.value != 1:
                 raise RuntimeError('unexpected tilelayer version')
 
-            name = ''
-            if item.name_ptr.value >= 0:
-                name = self._get_data_str(item.name_ptr.value)
+            name = self._get_data_str(item.name_ptr.value)
 
-            image = ItemImage()
             if item.external.value:
-                image.set_external(name)
+                ItemImageExternal(
+                    manager=self._item_manager,
+                    name=name,
+                    _id=i
+                )
             else:
                 loaded_img: Image.Image = Image.frombytes(  # type: ignore
                     'RGBA',
                     (item.width.value, item.height.value),
                     self._get_data(item.data_ptr.value)
                 )
-                image.set_internal(loaded_img, name)
+                ItemImageInternal(
+                    manager=self._item_manager,
+                    image=loaded_img,
+                    name=name,
+                    _id=i
+                )
 
-            yield self._set_id(image, i)
+    def _add_tile_layer(self, index: int, detail: bool):
+        item = self._get_item(CItemTileLayer, index)
 
-    def _get_item_tile_layer(self,
-                             layer_header: CItemLayer,
-                             item_data: CItemTileLayer,
-                             index: int,
-                             detail: bool):
-        if item_data.version.value != 3:
+        if item.version.value != 3:
             raise RuntimeError('unexpected tilelayer version')
 
-        flags = item_data.flags.value
+        flags = item.flags.value
         is_game = EnumTileLayerFlags.GAME & flags > 0
         is_tele = EnumTileLayerFlags.TELE & flags > 0
         is_speedup = EnumTileLayerFlags.SPEEDUP & flags > 0
@@ -205,118 +204,101 @@ class DataFileReader:
         elif is_tune:
             layer_type = TuneTileLayer
 
-        # TODO: use ItemEnvelopeRef_impl instead
-        env_ref: Optional[ItemEnvelope] = None
-        env_ref_id = item_data.color_envelope_ref.value
-        # if env_ref_id >= 0:
-        #     env_ref = self._set_id(ItemEnvelope(), env_ref_id)
+        env_ref: Optional[ItemEnvelope] = self._item_manager.find_item(ItemEnvelope, item.color_envelope_ref.value)
 
-        image_ref: Optional[ItemImage] = None
-        image_ref_id = item_data.image_ref.value
-        if image_ref_id >= 0:
-            image_ref = self._set_id(ItemImage(), image_ref_id)
+        image_ref: Optional[ItemImage] = self._item_manager.find_item(ItemImage, item.image_ref.value)
 
-        width = item_data.width.value
-        height = item_data.height.value
+        width = item.width.value
+        height = item.height.value
         layer = layer_type(
-            width,
-            height,
-            env_ref,
-            image_ref,
-            item_data.color_envelope_offset.value,
-            item_data.color.value,
-            detail,
-            is_game,
-            is_tele,
-            is_speedup,
-            is_front,
-            is_switch,
-            is_tune,
-            item_data.name.value
+            manager=self._item_manager,
+            width=width,
+            height=height,
+            color_envelope_ref=env_ref,
+            image_ref=image_ref,
+            color_envelope_offset=item.color_envelope_offset.value,
+            color=item.color.value,
+            detail=detail,
+            is_game=is_game,
+            is_tele=is_tele,
+            is_speedup=is_speedup,
+            is_front=is_front,
+            is_switch=is_switch,
+            is_tune=is_tune,
+            name=item.name.value,
+            _id=index
         )
 
+        # TODO: can this be made nicer?
         if isinstance(layer, VanillaTileLayer):
-            data_ptr = item_data.data_ptr.value
+            data_ptr = item.data_ptr.value
             if is_front:
-                data_ptr = item_data.data_front_ptr.value
+                data_ptr = item.data_front_ptr.value
             layer.tiles = VanillaTileManager(width, height, is_front | is_game, self._get_data(data_ptr))
         elif isinstance(layer, TeleTileLayer):
-            data_ptr = item_data.data_tele_ptr.value
+            data_ptr = item.data_tele_ptr.value
             layer.tiles = TeleTileManager(width, height, self._get_data(data_ptr))
         elif isinstance(layer, SpeedupTileLayer):
-            data_ptr = item_data.data_speedup_ptr.value
+            data_ptr = item.data_speedup_ptr.value
             layer.tiles = SpeedupTileManager(width, height, self._get_data(data_ptr))
         elif isinstance(layer, SwitchTileLayer):
-            data_ptr = item_data.data_switch_ptr.value
+            data_ptr = item.data_switch_ptr.value
             layer.tiles = SwitchTileManager(width, height, self._get_data(data_ptr))
         else:
-            data_ptr = item_data.data_tune_ptr.value
+            data_ptr = item.data_tune_ptr.value
             layer.tiles = TuneTileManager(width, height, self._get_data(data_ptr))
 
-        return self._set_id(layer, index)
-
-    def _get_item_quad_layer(self,
-                             layer_header: CItemLayer,
-                             item_data: CItemQuadLayer,
-                             index: int,
-                             detail: bool):
+    def _add_quad_layer(self, index: int, detail: bool):
         # if item_data.version.value != 3:
         #     raise RuntimeError('unexpected tilelayer version')
-        return self._set_id(VanillaTileLayer(0, 0), index)
+        pass
 
-    def _get_item_sound_layer(self,
-                              layer_header: CItemLayer,
-                              item_data: CItemSoundLayer,
-                              index: int,
-                              detail: bool):
+    def _add_sound_layer(self, index: int, detail: bool):
         # if item_data.version.value != 3:
         #     raise RuntimeError('unexpected tilelayer version')
-        return self._set_id(VanillaTileLayer(0, 0), index)
+        pass
 
-    def _get_item_layer(self, index: int):
-        item = self._get_item(EnumItemType.LAYER, index)
-        if not isinstance(item, tuple):
-            raise RuntimeError('unexpected item returned')
+    def add_layers(self):
+        for i in range(self._get_num_items(CItemLayer)):
+            item = self._get_item(CItemLayer, i)
 
-        detail = EnumLayerFlags.DETAIL & item[0].flags.value > 0
+            detail = EnumLayerFlags.DETAIL & item.flags.value > 0
 
-        if isinstance(item[1], CItemTileLayer):
-            return self._get_item_tile_layer(item[0], item[1], index, detail)
-        elif isinstance(item[1], CItemQuadLayer):
-            return self._get_item_quad_layer(item[0], item[1], index, detail)
-        else:
-            return self._get_item_sound_layer(item[0], item[1], index, detail)
+            if item.type.value in [EnumLayerType.SOUNDS, EnumLayerType.SOUNDS_DEPCRECATED]:
+                self._add_sound_layer(i, detail)
+            elif item.type.value == EnumLayerType.QUADS:
+                self._add_quad_layer(i, detail)
+            else:
+                self._add_tile_layer(i, detail)
 
-    @property
-    def item_layers(self):
-        for i in range(self._get_num_items(EnumItemType.LAYER)):
-            yield self._get_item_layer(i)
-
-    @property
-    def item_groups(self):
-        for i in range(self._get_num_items(EnumItemType.GROUP)):
-            item = self._get_item(EnumItemType.GROUP, i)
-            if not isinstance(item, CItemGroup):
-                raise RuntimeError('unexpected item returned')
+    def add_groups(self):
+        for i in range(self._get_num_items(CItemGroup)):
+            item = self._get_item(CItemGroup, i)
 
             if item.version.value != 3:
                 raise RuntimeError('unexpected tilelayer version')
 
             layer_refs: list[ItemLayer] = []
             for k in range(item.num_layers.value):
-                ref = self._set_id(ItemLayer(), item.start_layer.value + k)
-                layer_refs.append(ref)
+                ref = self._item_manager.find_item(ItemLayer, item.start_layer.value + k)
+                if ref:
+                    layer_refs.append(ref)
+                # TODO: enable when all layers have been implemented
+                # else:
+                #     raise RuntimeError('')
 
-            yield self._set_id(ItemGroup(
-                layer_refs,
-                item.x_offset.value,
-                item.y_offset.value,
-                item.x_parallax.value,
-                item.y_parallax.value,
-                item.clipping.value > 0,
-                item.clip_x.value,
-                item.clip_y.value,
-                item.clip_width.value,
-                item.clip_height.value,
-                item.name.value
-            ), i)
+            ItemGroup(
+                manager=self._item_manager,
+                layers=layer_refs,
+                x_offset=item.x_offset.value,
+                y_offset=item.y_offset.value,
+                x_parallax=item.x_parallax.value,
+                y_parallax=item.y_parallax.value,
+                clipping=item.clipping.value > 0,
+                clip_x=item.clip_x.value,
+                clip_y=item.clip_y.value,
+                clip_width=item.clip_width.value,
+                clip_height=item.clip_height.value,
+                name=item.name.value,
+                _id=i
+            )

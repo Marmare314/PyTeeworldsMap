@@ -12,23 +12,14 @@ class TWMap:
     def open(self, path: bytes):
         # with open(path, 'rb') as file:
         #     data = DataFileReader(file.read())
-        data = DataFileReader(path)
-
         self._item_manager.clear()
+        data = DataFileReader(path, self._item_manager)
 
-        self._item_manager.add(data.item_version)
-        self._item_manager.add(data.item_info)
-
-        for image in data.item_images:
-            self._item_manager.add(image)
-
-        for layer in data.item_layers:
-            layer._set_references_import(self._item_manager)
-            self._item_manager.add(layer)
-
-        for group in data.item_groups:
-            group._set_references_import(self._item_manager)
-            self._item_manager.add(group)
+        data.add_version()
+        data.add_info()
+        data.add_images()
+        data.add_layers()
+        data.add_groups()
 
         # asserts that a game_layer exists
         self._item_manager.game_layer
@@ -64,7 +55,7 @@ class TWMap:
 
 
 if __name__ == '__main__':
-    with open('../test_maps/HeyTux2.map', 'rb') as file:
+    with open('test_maps/HeyTux2.map', 'rb') as file:
         map_content = file.read()
 
     m = TWMap()
@@ -76,8 +67,8 @@ if __name__ == '__main__':
     # print(m.info.license)
     # print(m.info.settings)
 
-    saved_content = m.save('test_maps/HeyTux2Saved.map')
-    m.open(saved_content)
+    # saved_content = m.save('test_maps/HeyTux2Saved.map')
+    # m.open(saved_content)
 
     # print(m.info.author)
     # print(m.info.mapversion)

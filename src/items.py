@@ -20,16 +20,17 @@ class ItemManager:
     def __init__(self):
         self._item_set: set[Item] = set()
 
-        version = ItemVersion(3)
-        info = ItemInfo()
-        game_layer = TileLayer(100, 100, is_game=True, name='Game')
-        game_group = ItemGroup([game_layer], name='Game')
+        version = ItemVersion(self, 3)
+        info = ItemInfo(self)
+        game_layer = TileLayer(self, 100, 100, is_game=True, name='Game')
+        game_group = ItemGroup(self, [game_layer], name='Game')
 
-        self.add(version)
-        self.add(info)
-        self.add(game_group)
+        self.register(version)
+        self.register(info)
+        self.register(game_layer)
+        self.register(game_group)
 
-    def find_item(self, item_type: 'Type[Item]', id: int):
+    def find_item(self, item_type: 'Type[T]', id: int) -> Optional[T]:
         for item in self._item_set:
             if item._item_id == id and isinstance(item, item_type):
                 return item
@@ -52,33 +53,24 @@ class ItemManager:
         ids = self._get_ids_type(item_type)
         return next(filterfalse(set(ids).__contains__, count(0)))
 
-    def _generate_id(self, item: 'Item'):
-        new_id = self._next_free_id(type(item))
-        item._item_id = new_id
-
     def minimize_ids(self):
         pass
 
-    def add(self, item: 'Item'):
-        if item._has_manager:
-            if item._item_manager != self:
-                pass  # copy item and that one instead
+    def register(self, item: 'Item'):
+        if item._item_manager != self:
+            raise NotImplementedError()  # TODO: add copy of item
         else:
-            item._item_manager = self
-
-        if item._has_id:
-            item_id: int = item._item_id
-            stored_item = self.find_item(type(item), item_id)
-            if stored_item:
-                self._item_set.remove(stored_item)
+            generated_id = self._next_free_id(type(item))
             self._item_set.add(item)
-        else:
-            self._generate_id(item)
-            self._item_set.add(item)
+            return generated_id
 
-        item._add_references()
-        item._validate_references()
-        item._validate_data()
+    def register_with_id(self, item: 'Item', id: int):
+        if id in self._get_ids_type(type(item)):
+            raise RuntimeError('id already used')
+        self._item_set.add(item)
+
+    def validate(self, item: 'Item'):
+        pass
 
     def clear(self):
         self._item_set = set()
@@ -104,7 +96,7 @@ class ItemManager:
                 yield item
 
     @property
-    def _layers(self):
+    def layers(self):
         for item in sorted(self._item_set):
             if isinstance(item, ItemLayer):
                 yield item
@@ -117,7 +109,7 @@ class ItemManager:
 
     @property
     def game_layer(self) -> 'VanillaTileLayer':
-        for layer in self._layers:
+        for layer in self.layers:
             if layer.is_game:
                 if not isinstance(layer, VanillaTileLayer):
                     raise RuntimeError('game_layer has unexpected type')
@@ -126,80 +118,38 @@ class ItemManager:
 
 
 class Item:
-    def __init__(self):
-        self._has_id = False
-        self._has_manager = False
+    def __init__(self, manager: ItemManager, _id: Optional[int] = None):
+        self._item_manager = manager
+        if _id is not None:
+            self._item_manager.register_with_id(self, _id)
+            self._item_id = _id
+        else:
+            self._item_id = self._item_manager.register(self)
 
     def __lt__(self, other: 'Item'):
         return self._item_id < other._item_id
 
-    @property
-    def _item_id(self):
-        return self.__item_id
-
-    @_item_id.setter
-    def _item_id(self, value: int):
-        self._has_id = True
-        self.__item_id = value
-
-    @property
-    def _item_manager(self) -> ItemManager:
-        return self.__item_manager
-
-    @_item_manager.setter
-    def _item_manager(self, value: ItemManager):
-        self._has_manager = True
-        self.__item_manager = value
-
-    def _expect_manager(self):
-        if not self._has_manager:
-            raise RuntimeError('expected item to have a manager')
-
-    def _expect_id(self):
-        if not self._has_id:
-            raise RuntimeError('expected item to have an id')
-
-    def _validate_ref(self, item: 'Item'):
-        self._expect_manager()
-        item._expect_manager()
-        item._expect_id()
-        if self._item_manager != item._item_manager:
-            raise ValueError('items should be managed by the same manager')
-        if self._item_manager.find_item(type(item), item.__item_id) is None:
-            raise ValueError('Referenced item not valid')
-
-    def _add_ref(self, item: 'Item'):
-        self._expect_manager()
-        self._item_manager.add(item)
-
-    def _validate_references(self):
-        pass
-
-    def _add_references(self):
-        pass
-
-    def _set_references_import(self, manager: ItemManager):
-        self._item_manager = manager
-
-    def _validate_data(self):
-        pass
-
 
 class ItemVersion(Item):
-    def __init__(self, version: int):
-        super().__init__()
+    def __init__(self,
+                 manager: ItemManager,
+                 version: int,
+                 _id: Optional[int] = None):
+        super().__init__(manager, _id)
 
         self.version = version
 
 
 class ItemInfo(Item):
     def __init__(self,
+                 manager: ItemManager,
                  author: str = '',
                  mapversion: str = '',
                  credits: str = '',
                  license: str = '',
-                 settings: list[str] = []):
-        super().__init__()
+                 settings: list[str] = [],
+                 _id: Optional[int] = None):
+        super().__init__(manager, _id)
 
         self.author = author
         self.mapversion = mapversion
@@ -212,12 +162,8 @@ class ItemInfo(Item):
 
 
 class ItemImage(Item):
-    def __init__(self):
-        super().__init__()
-
-        self._image = None
-        self._name = None
-        self._external = None
+    def __init__(self, manager: ItemManager, _id: Optional[int] = 0):
+        super().__init__(manager, _id)
 
     def set_internal(self, image: Image.Image, name: str):
         self._image = image
@@ -232,37 +178,53 @@ class ItemImage(Item):
 
     @property
     def external(self):
-        if self._external is not None:
-            return self._external
-        raise RuntimeError('image has to be set first')
+        return self._external
 
     @property
     def image(self):
-        if self._image is not None:
-            return self._image
-        raise RuntimeError('image has to be set first')
+        return self._image
 
     @property
     def name(self):
-        if self._name is not None:
-            return self._name
-        raise RuntimeError('image has to be set first')
+        return self._name
 
-    @name.setter
+
+class ItemImageInternal(ItemImage):
+    def __init__(self,
+                 manager: ItemManager,
+                 image: Image.Image,
+                 name: str,
+                 _id: Optional[int] = None):
+        super().__init__(manager, _id)
+        self.set_internal(image, name)
+
+    @ItemImage.name.setter
     def name(self, name: str):
-        if self._external:
-            raise ValueError('Cannot change name of external image')
-        self._name = name  # TODO: any error checking?
+        # TODO: check if name is valid
+        self._name = name
+
+
+class ItemImageExternal(ItemImage):
+    def __init__(self,
+                 manager: ItemManager,
+                 name: str,
+                 _id: Optional[int] = None):
+        super().__init__(manager, _id)
+        self.set_external(name)
 
 
 class ItemEnvelope(Item):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, manager: ItemManager, _id: Optional[int] = None):
+        super().__init__(manager, _id)
 
 
 class ItemLayer(Item):
-    def __init__(self, detail: bool = False, name: str = ''):
-        super().__init__()
+    def __init__(self,
+                 manager: ItemManager,
+                 detail: bool = False,
+                 name: str = '',
+                 _id: Optional[int] = None):
+        super().__init__(manager, _id)
 
         self.detail = detail
         self._name = name
@@ -283,6 +245,7 @@ class ItemLayer(Item):
 
 class TileLayer(ItemLayer):
     def __init__(self,
+                 manager: ItemManager,
                  width: int,
                  height: int,
                  color_envelope_ref: Optional[ItemEnvelope] = None,
@@ -296,8 +259,9 @@ class TileLayer(ItemLayer):
                  is_front: bool = False,
                  is_switch: bool = False,
                  is_tune: bool = False,
-                 name: str = ''):
-        super().__init__(detail, name)
+                 name: str = '',
+                 _id: Optional[int] = None):
+        super().__init__(manager, detail, name, _id=_id)
 
         self._reset_all_flags()
         self.is_game = is_game
@@ -306,6 +270,7 @@ class TileLayer(ItemLayer):
         self.is_front = is_front
         self.is_switch = is_switch
         self.is_tune = is_tune
+        # TODO: was this actually needed self._validate_flags()?
 
         self._color_envelope_ref = color_envelope_ref
         self._image_ref = image_ref
@@ -323,7 +288,7 @@ class TileLayer(ItemLayer):
     @color_envelope.setter
     def color_envelope(self, item: Optional[ItemEnvelope]):
         if item:
-            self._validate_ref(item)
+            self._item_manager.validate(item)
         self._color_envelope_ref = item
 
     @property
@@ -333,37 +298,8 @@ class TileLayer(ItemLayer):
     @image.setter
     def image(self, item: Optional[ItemImage]):
         if item:
-            self._validate_ref(item)
+            self._item_manager.validate(item)
         self._image_ref = item
-
-    def _add_references(self):
-        if self._image_ref:
-            self._add_ref(self._image_ref)
-        if self._color_envelope_ref:
-            self._add_ref(self._color_envelope_ref)
-
-    def _validate_references(self):
-        if self._image_ref:
-            self._validate_ref(self._image_ref)
-        if self._color_envelope_ref:
-            self._validate_ref(self._color_envelope_ref)
-
-    def _set_references_import(self, manager: ItemManager):
-        super()._set_references_import(manager)
-
-        self._expect_manager()
-
-        if self._image_ref:
-            self._image_ref = self._item_manager.find_item(ItemImage, self._image_ref._item_id)
-        if self._color_envelope_ref:
-            self._color_envelope_ref = self._item_manager.find_item(ItemImage, self._color_envelope_ref._item_id)
-
-    def _validate_data(self):
-        self._expect_manager()
-
-        for flag in EnumTileLayerFlags:
-            flags = self._item_manager.map(TileLayer, lambda s: TileLayer._get_flag(s, flag))
-            assert sum(flags) <= 1
 
     @property
     def width(self):
@@ -406,16 +342,12 @@ class TileLayer(ItemLayer):
             self._set_flag(flag, False)
 
     def _flag_setter(self, flag: EnumTileLayerFlags, value: bool):
-        if not self._has_manager:
-            self._set_flag(flag, value)
-        else:
-            if value:
-                self._reset_all_flags()
-                self._item_manager.map(TileLayer, lambda s: TileLayer._set_flag(s, flag, False))
-            else:
-                if self._get_flag(flag):
-                    raise RuntimeError('the flag will be removed automatically if another one is set')
-            self._set_flag(flag, value)
+        if value:
+            self._reset_all_flags()
+            self._item_manager.map(TileLayer, lambda s: TileLayer._set_flag(s, flag, False))
+        elif flag == EnumTileLayerFlags.GAME and self._get_flag(flag):
+            raise RuntimeError('the game flag will be automatically removed if it is set on another layer')
+        self._set_flag(flag, value)
 
     @property
     def is_game(self):
@@ -532,6 +464,7 @@ class SoundLayer(ItemLayer):
 
 class ItemGroup(Item):
     def __init__(self,
+                 manager: ItemManager,
                  layers: list[ItemLayer],
                  x_offset: int = 0,
                  y_offset: int = 0,
@@ -542,10 +475,11 @@ class ItemGroup(Item):
                  clip_y: int = 0,
                  clip_width: int = 0,
                  clip_height: int = 0,
-                 name: str = ''):
-        super().__init__()
+                 name: str = '',
+                 _id: Optional[int] = None):
+        super().__init__(manager, _id)
 
-        self._layers = list(sorted(layers))
+        self._layers = layers
         self._x_offset = x_offset
         self._y_offset = y_offset
         self._x_parallax = x_parallax
@@ -557,31 +491,9 @@ class ItemGroup(Item):
         self._clip_height = clip_height
         self._name = name
 
-    def _add_references(self):
-        for layer in self._layers:
-            self._add_ref(layer)
-
-    def _validate_references(self):
-        for layer in self._layers:
-            self._validate_ref(layer)
-
-    def _set_references_import(self, manager: ItemManager):
-        super()._set_references_import(manager)
-
-        self._expect_manager()
-
-        new_layers: list[ItemLayer] = []
-        for layer in self._layers:
-            new_layer = self._item_manager.find_item(ItemLayer, layer._item_id)
-            if new_layer and isinstance(new_layer, ItemLayer):
-                new_layers.append(new_layer)
-            else:
-                raise RuntimeError('invalid reference on import')
-        self._layers = new_layers
-
     @property
     def layers(self):
-        return list(self._layers)
+        return list(sorted(self._layers))
 
     @property
     def x_offset(self):
@@ -666,12 +578,11 @@ class ItemGroup(Item):
 
     def __repr__(self):
         if self.name:
-            print(bytes(self.name, 'utf8'))
             return f'<Group: {self.name}>'
         else:
             return f'<Group: [{self._item_id}]>'
 
 
 class ItemSound(Item):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, manager: ItemManager, _id: Optional[int] = None):
+        super().__init__(manager, _id)
