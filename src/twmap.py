@@ -22,21 +22,21 @@ class TWMap:
         for image in data.item_images:
             self._item_manager.add(image)
 
-        # for layer in data.item_layers:
-        #     layer._set_references_import(self._item_manager)
-        #     self._item_manager.add(layer)
+        for layer in data.item_layers:
+            layer._set_references_import(self._item_manager)
+            self._item_manager.add(layer)
 
-        # for group in data.item_groups:
-        #     group._set_references_import(self._item_manager)
-        #     self._item_manager.add(group)
+        for group in data.item_groups:
+            group._set_references_import(self._item_manager)
+            self._item_manager.add(group)
 
-        # # asserts that a game_layer exists
-        # self._item_manager.game_layer
+        # asserts that a game_layer exists
+        self._item_manager.game_layer
 
     def save(self, path: str):
         data = DataFileWriter()
 
-        self._item_manager.minimize_ids()
+        # self._item_manager.minimize_ids()  # TODO: instead -> also sort layers
 
         data.register_item(self._item_manager.version)
         data.register_item(self._item_manager.info)
@@ -63,24 +63,24 @@ class TWMap:
         pass
 
 
-# with open('test_maps/HeyTux2.map', 'rb') as file:
-#     map_content = file.read()
+if __name__ == '__main__':
+    with open('../test_maps/HeyTux2.map', 'rb') as file:
+        map_content = file.read()
 
-# m = TWMap()
-# m.open(map_content)
+    m = TWMap()
+    m.open(map_content)
 
-# print(m.info.author)
-# print(m.info.mapversion)
-# print(m.info.credits)
-# print(m.info.license)
-# print(m.info.settings)
+    # print(m.info.author)
+    # print(m.info.mapversion)
+    # print(m.info.credits)
+    # print(m.info.license)
+    # print(m.info.settings)
 
-# saved_content = m.save('test_maps/HeyTux2Saved.map')
+    saved_content = m.save('test_maps/HeyTux2Saved.map')
+    m.open(saved_content)
 
-# m.open(saved_content)
-
-# print(m.info.author)
-# print(m.info.mapversion)
-# print(m.info.credits)
-# print(m.info.license)
-# print(m.info.settings)
+    # print(m.info.author)
+    # print(m.info.mapversion)
+    # print(m.info.credits)
+    # print(m.info.license)
+    # print(m.info.settings)

@@ -1,9 +1,11 @@
+# pyright: reportPrivateUsage=false
+
 from collections import defaultdict
 from constants import EnumItemType
-from map_structs import CHeaderV4, CItemHeader, CItemImage, CItemInfo, CItemType, CItemVersion, CVersionHeader
+from map_structs import CHeaderV4, CItemGroup, CItemHeader, CItemImage, CItemInfo, CItemType, CItemVersion, CVersionHeader
 from stringfile import StringFile
-from structs import c_rawstr4, c_int32, c_struct, c_type
-from items import Item, ItemImage, ItemInfo, ItemVersion
+from structs import c_intstr3, c_rawstr4, c_int32, c_struct, c_type
+from items import Item, ItemGroup, ItemImage, ItemInfo, ItemLayer, ItemVersion
 import zlib
 
 
@@ -25,6 +27,10 @@ class DataFileWriter:
             self._register_item_info(item)
         elif isinstance(item, ItemImage):
             self._register_item_image(item)
+        elif isinstance(item, ItemLayer):
+            pass
+        elif isinstance(item, ItemGroup):
+            pass
         else:
             raise NotImplementedError()
 
@@ -80,6 +86,30 @@ class DataFileWriter:
 
         self._item_types[EnumItemType.IMAGE] += 1
         self._items[EnumItemType.IMAGE].append(c_item)
+
+    def _register_item_layer(self, item: ItemLayer):
+        pass
+
+    def _register_item_group(self, item: ItemGroup):
+        c_item = CItemGroup()
+        c_item.version = c_int32(3)
+        c_item.x_offset = c_int32(item.x_offset)
+        c_item.y_offset = c_int32(item.y_offset)
+        c_item.x_parallax = c_int32(item.x_parallax)
+        c_item.y_parallax = c_int32(item.y_parallax)
+        c_item.start_layer = c_int32(item.layers[0]._item_id)
+        c_item.num_layers = c_int32(len(item.layers))
+
+        c_item.clipping = c_int32(item.clipping)
+        c_item.clip_x = c_int32(item.clip_x)
+        c_item.clip_y = c_int32(item.clip_y)
+        c_item.clip_width = c_int32(item.clip_width)
+        c_item.clip_height = c_int32(item.clip_height)
+
+        c_item.name = c_intstr3(item.name)
+
+        self._item_types[EnumItemType.GROUP] += 1
+        self._items[EnumItemType.GROUP].append(c_item)
 
     def _register_data_str_list(self, data: list[str]):
         byte_data = b''

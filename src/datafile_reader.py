@@ -205,10 +205,11 @@ class DataFileReader:
         elif is_tune:
             layer_type = TuneTileLayer
 
+        # TODO: use ItemEnvelopeRef_impl instead
         env_ref: Optional[ItemEnvelope] = None
         env_ref_id = item_data.color_envelope_ref.value
-        if env_ref_id >= 0:
-            env_ref = self._set_id(ItemEnvelope(), env_ref_id)
+        # if env_ref_id >= 0:
+        #     env_ref = self._set_id(ItemEnvelope(), env_ref_id)
 
         image_ref: Optional[ItemImage] = None
         image_ref_id = item_data.image_ref.value
