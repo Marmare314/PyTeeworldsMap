@@ -303,8 +303,8 @@ class DataFileReader:
                 raise RuntimeError('unexpected tilelayer version')
 
             layer_refs: list[ItemLayer] = []
-            for i in range(item.num_layers.value):
-                ref = self._set_id(ItemLayer(), item.start_layer.value + i)
+            for k in range(item.num_layers.value):
+                ref = self._set_id(ItemLayer(), item.start_layer.value + k)
                 layer_refs.append(ref)
 
             yield self._set_id(ItemGroup(

@@ -40,8 +40,16 @@ class c_int_impl(c_type):
 
     @value.setter
     def value(self, value: int):
-        # TODO: check range
+        assert self.fits_value(value)
         self._value = value
+
+    @classmethod
+    def fits_value(cls, value: int):
+        if cls._signed:
+            limit = 2 ** (cls._num_bytes * 8 - 1)
+            return -limit <= value < limit
+        else:
+            return 0 <= value < 2 ** (cls._num_bytes * 8)
 
     @classmethod
     def from_data(cls, data: StringFile) -> 'c_int_impl':
@@ -122,7 +130,7 @@ class c_intstr_impl(c_str_impl):
             for b in msg[i:i+4][::-1]:
                 str_msg += safe_chr(b - 128)
 
-        return str_msg.rstrip('\0')
+        return str_msg[:-1].rstrip('\0')
 
 
 class c_intstr3(c_intstr_impl):

@@ -1,17 +1,21 @@
 # pyright: reportPrivateUsage=false
 
 from PIL import Image
-from typing import Optional, Type
+from typing import Callable, Optional, Type, TypeVar
 from itertools import count, filterfalse
 
-from structs import c_intstr3
+from structs import c_intstr3, c_int32
 from tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileManager, TileManager, TuneTileManager, VanillaTileManager
+from constants import EnumTileLayerFlags
+
+
+T = TypeVar('T', bound='Item')
+S = TypeVar('S')
 
 
 ColorTuple = tuple[int, int, int, int]
 
 
-# TODO: make sure references are internal and valid
 class ItemManager:
     def __init__(self):
         self._item_set: set[Item] = set()
@@ -29,6 +33,13 @@ class ItemManager:
         for item in self._item_set:
             if item._item_id == id and isinstance(item, item_type):
                 return item
+
+    def map(self, item_type: Type[T], f: Callable[[T], S]) -> list[S]:
+        ret_list: list[S] = []
+        for item in self._item_set:
+            if isinstance(item, item_type):
+                ret_list.append(f(item))
+        return ret_list
 
     def _get_ids_type(self, item_type: 'Type[Item]'):
         ids: set[int] = set()
@@ -67,6 +78,7 @@ class ItemManager:
 
         item._add_references()
         item._validate_references()
+        item._validate_data()
 
     def clear(self):
         self._item_set = set()
@@ -80,22 +92,23 @@ class ItemManager:
 
     @property
     def _layers(self):
-        for item in self._item_set:
+        for item in sorted(self._item_set):
             if isinstance(item, ItemLayer):
                 yield item
 
     @property
     def groups(self):
-        for item in self._item_set:
+        for item in sorted(self._item_set):
             if isinstance(item, ItemGroup):
                 yield item
 
     @property
     def game_layer(self) -> 'VanillaTileLayer':
         for layer in self._layers:
-            if not isinstance(layer, VanillaTileLayer):
-                raise RuntimeError('game_layer has unexpected type')
-            return layer
+            if layer.is_game:
+                if not isinstance(layer, VanillaTileLayer):
+                    raise RuntimeError('game_layer has unexpected type')
+                return layer
         raise RuntimeError('ItemManager should always have a game layer')
 
 
@@ -103,6 +116,9 @@ class Item:
     def __init__(self):
         self._has_id = False
         self._has_manager = False
+
+    def __lt__(self, other: 'Item'):
+        return self._item_id < other._item_id
 
     @property
     def _item_id(self):
@@ -151,6 +167,9 @@ class Item:
 
     def _set_references_import(self, manager: ItemManager):
         self._item_manager = manager
+
+    def _validate_data(self):
+        pass
 
 
 class ItemVersion(Item):
@@ -219,14 +238,24 @@ class ItemEnvelope(Item):
 
 
 class ItemLayer(Item):
-    def __init__(self, detail: bool = False):
+    def __init__(self, detail: bool = False, name: str = ''):
         super().__init__()
 
         self.detail = detail
+        self._name = name
 
     @property
     def is_game(self) -> bool:
         return False
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value: str):
+        assert c_intstr3.fits_str(value)
+        self._name = value
 
 
 class TileLayer(ItemLayer):
@@ -245,9 +274,9 @@ class TileLayer(ItemLayer):
                  is_switch: bool = False,
                  is_tune: bool = False,
                  name: str = ''):
-        super().__init__(detail)
+        super().__init__(detail, name)
 
-        self._init_flags()
+        self._reset_all_flags()
         self.is_game = is_game
         self.is_tele = is_tele
         self.is_speedup = is_speedup
@@ -255,32 +284,23 @@ class TileLayer(ItemLayer):
         self.is_switch = is_switch
         self.is_tune = is_tune
 
-        # TODO: setters/getters
         self._color_envelope_ref = color_envelope_ref
         self._image_ref = image_ref
 
         self._color_envelope_offset = color_envelope_offset
         self.color = color
-        self._name = name
 
         # TODO: this is a bit memory inefficient when loading a file
         self._tiles = TileManager(width, height, bytes(width * height))
-
-    def _init_flags(self):
-        self._is_game = False
-        self._is_tele = False
-        self._is_speedup = False
-        self._is_front = False
-        self._is_switch = False
-        self._is_tune = False
 
     @property
     def color_envelope(self):
         return self._color_envelope_ref
 
     @color_envelope.setter
-    def color_envelope(self, item: ItemEnvelope):
-        self._validate_ref(item)
+    def color_envelope(self, item: Optional[ItemEnvelope]):
+        if item:
+            self._validate_ref(item)
         self._color_envelope_ref = item
 
     @property
@@ -288,8 +308,9 @@ class TileLayer(ItemLayer):
         self._image_ref
 
     @image.setter
-    def image(self, item: ItemImage):
-        self._validate_ref(item)
+    def image(self, item: Optional[ItemImage]):
+        if item:
+            self._validate_ref(item)
         self._image_ref = item
 
     def _add_references(self):
@@ -314,6 +335,13 @@ class TileLayer(ItemLayer):
         if self._color_envelope_ref:
             self._color_envelope_ref = self._item_manager.find_item(ItemImage, self._color_envelope_ref._item_id)
 
+    def _validate_data(self):
+        self._expect_manager()
+
+        for flag in EnumTileLayerFlags:
+            flags = self._item_manager.map(TileLayer, lambda s: TileLayer._get_flag(s, flag))
+            assert sum(flags) <= 1
+
     @property
     def width(self):
         return self._tiles.width
@@ -322,83 +350,103 @@ class TileLayer(ItemLayer):
     def height(self):
         return self._tiles.height
 
-    def _any_layer_flag(self):
-        return self.is_game or self.is_tele or self.is_speedup or self.is_front or self.is_switch or self.is_tune
+    def _get_flag(self, flag: EnumTileLayerFlags):
+        if flag == EnumTileLayerFlags.GAME:
+            return self._is_game
+        elif flag == EnumTileLayerFlags.TELE:
+            return self._is_tele
+        elif flag == EnumTileLayerFlags.SPEEDUP:
+            return self._is_speedup
+        elif flag == EnumTileLayerFlags.FRONT:
+            return self._is_front
+        elif flag == EnumTileLayerFlags.SWITCH:
+            return self._is_switch
+        elif flag == EnumTileLayerFlags.TUNE:
+            return self._is_tune
+
+    def _set_flag(self, flag: EnumTileLayerFlags, value: bool):
+        if flag == EnumTileLayerFlags.GAME:
+            self._is_game = value
+        elif flag == EnumTileLayerFlags.TELE:
+            self._is_tele = value
+        elif flag == EnumTileLayerFlags.SPEEDUP:
+            self._is_speedup = value
+        elif flag == EnumTileLayerFlags.FRONT:
+            self._is_front = value
+        elif flag == EnumTileLayerFlags.SWITCH:
+            self._is_switch = value
+        elif flag == EnumTileLayerFlags.TUNE:
+            self._is_tune = value
+
+    def _reset_all_flags(self):
+        for flag in EnumTileLayerFlags:
+            self._set_flag(flag, False)
+
+    def _flag_setter(self, flag: EnumTileLayerFlags, value: bool):
+        if not self._has_manager:
+            self._set_flag(flag, value)
+        else:
+            if value:
+                self._reset_all_flags()
+                self._item_manager.map(TileLayer, lambda s: TileLayer._set_flag(s, flag, False))
+            else:
+                if self._get_flag(flag):
+                    raise RuntimeError('the flag will be removed automatically if another one is set')
+            self._set_flag(flag, value)
 
     @property
     def is_game(self):
-        return self._is_game
+        return self._get_flag(EnumTileLayerFlags.GAME)
 
     @is_game.setter
     def is_game(self, value: bool):
-        if value and self._any_layer_flag() and not self.is_game:
-            raise ValueError('Only one layer flag can be set at a time')
-
-        # TODO: also make sure that there is exactly one game layer in the itmemmanager
-
-        self._is_game = value
+        self._flag_setter(EnumTileLayerFlags.GAME, value)
 
     @property
     def is_tele(self):
-        return self._is_tele
+        return self._get_flag(EnumTileLayerFlags.TELE)
 
     @is_tele.setter
     def is_tele(self, value: bool):
-        if value and self._any_layer_flag() and not self.is_tele:
-            raise ValueError('Only one layer flag can be set at a time')
-        self._is_tele = value
+        self._flag_setter(EnumTileLayerFlags.TELE, value)
 
     @property
     def is_speedup(self):
-        return self._is_speedup
+        return self._get_flag(EnumTileLayerFlags.SPEEDUP)
 
     @is_speedup.setter
     def is_speedup(self, value: bool):
-        if value and self._any_layer_flag() and not self.is_speedup:
-            raise ValueError('Only one layer flag can be set at a time')
-        self._is_speedup = value
+        self._flag_setter(EnumTileLayerFlags.SPEEDUP, value)
 
     @property
     def is_front(self):
-        return self._is_front
+        return self._get_flag(EnumTileLayerFlags.FRONT)
 
     @is_front.setter
     def is_front(self, value: bool):
-        if value and self._any_layer_flag() and not self.is_front:
-            raise ValueError('Only one layer flag can be set at a time')
-        self._is_front = value
+        self._flag_setter(EnumTileLayerFlags.FRONT, value)
 
     @property
     def is_switch(self):
-        return self._is_switch
+        return self._get_flag(EnumTileLayerFlags.SWITCH)
 
     @is_switch.setter
     def is_switch(self, value: bool):
-        if value and self._any_layer_flag() and not self.is_switch:
-            raise ValueError('Only one layer flag can be set at a time')
-        self._is_switch = value
+        self._flag_setter(EnumTileLayerFlags.SWITCH, value)
 
     @property
     def is_tune(self):
-        return self._is_tune
+        return self._get_flag(EnumTileLayerFlags.TUNE)
 
     @is_tune.setter
     def is_tune(self, value: bool):
-        if value and self._any_layer_flag() and not self.is_tune:
-            raise ValueError('Only one layer flag can be set at a time')
-        self._is_tune = value
-
-    @property
-    def name(self):
-        return self._name
-
-    @name.setter
-    def name(self, value: str):
-        assert c_intstr3.fits_str(value)
-        self._name = value
+        self._flag_setter(EnumTileLayerFlags.TUNE, value)
 
     def __repr__(self):
-        return f'<tile_layer: {self.name}>'
+        if self.name:
+            return f'<tile_layer: {self.name}>'
+        else:
+            return f'<tile_layer: [{self._item_id}]>'
 
 
 class VanillaTileLayer(TileLayer):
@@ -474,7 +522,7 @@ class ItemGroup(Item):
                  name: str = ''):
         super().__init__()
 
-        self._layers = layers
+        self._layers = list(sorted(layers))
         self._x_offset = x_offset
         self._y_offset = y_offset
         self._x_parallax = x_parallax
@@ -499,10 +547,10 @@ class ItemGroup(Item):
 
         self._expect_manager()
 
-        new_layers: list[Item] = []
+        new_layers: list[ItemLayer] = []
         for layer in self._layers:
             new_layer = self._item_manager.find_item(ItemLayer, layer._item_id)
-            if new_layer:
+            if new_layer and isinstance(new_layer, ItemLayer):
                 new_layers.append(new_layer)
             else:
                 raise RuntimeError('invalid reference on import')
@@ -510,10 +558,95 @@ class ItemGroup(Item):
 
     @property
     def layers(self):
-        return self._layers
+        return list(self._layers)
+
+    @property
+    def x_offset(self):
+        return self._x_offset
+
+    @x_offset.setter
+    def x_offset(self, value: int):
+        assert c_int32.fits_value(value)
+        self._x_offset = value
+
+    @property
+    def y_offset(self):
+        return self._y_offset
+
+    @y_offset.setter
+    def y_offset(self, value: int):
+        assert c_int32.fits_value(value)
+        self._y_offset = value
+
+    @property
+    def x_parallax(self):
+        return self._x_parallax
+
+    @x_parallax.setter
+    def x_parallax(self, value: int):
+        assert c_int32.fits_value(value)
+        self._x_parallax = value
+
+    @property
+    def y_parallax(self):
+        return self._y_parallax
+
+    @y_parallax.setter
+    def y_parallax(self, value: int):
+        assert c_int32.fits_value(value)
+        self._y_parallax = value
+
+    @property
+    def clip_x(self):
+        return self._clip_x
+
+    @clip_x.setter
+    def clip_x(self, value: int):
+        assert c_int32.fits_value(value)
+        self._clip_x = value
+
+    @property
+    def clip_y(self):
+        return self._clip_y
+
+    @clip_y.setter
+    def clip_y(self, value: int):
+        assert c_int32.fits_value(value)
+        self._clip_y = value
+
+    @property
+    def clip_width(self):
+        return self._clip_width
+
+    @clip_width.setter
+    def clip_width(self, value: int):
+        assert c_int32.fits_value(value)
+        self._clip_width = value
+
+    @property
+    def clip_height(self):
+        return self._clip_height
+
+    @clip_height.setter
+    def clip_height(self, value: int):
+        assert c_int32.fits_value(value)
+        self._clip_height = value
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value: str):
+        assert c_intstr3.fits_str(value)
+        self._name = value
 
     def __repr__(self):
-        return f'<Group: {self._name}>'  # TODO: use getter
+        if self.name:
+            print(bytes(self.name, 'utf8'))
+            return f'<Group: {self.name}>'
+        else:
+            return f'<Group: [{self._item_id}]>'
 
 
 class ItemSound(Item):
