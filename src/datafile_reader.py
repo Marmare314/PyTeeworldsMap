@@ -69,7 +69,7 @@ class DataFileReader:
         for item_type in self._item_types:
             if item_type.type_id.value == type_id:
                 return item_type.num.value
-        raise RuntimeError('type_id not found')
+        return 0
 
     def _get_item(self, type_id: EnumItemType, index: int):
         self._data.seek(self._items_start + self._item_offsets[self._get_type_start(type_id) + index])

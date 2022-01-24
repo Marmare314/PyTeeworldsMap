@@ -226,23 +226,33 @@ class ItemImage(Item):
 
     def set_external(self, name: str):
         # TODO: assert name is in externals
-        self._image = Image.open(f'mapres/{name}.png')
+        self._image = Image.open(f'../mapres/{name}.png')
         self._name = name
         self._external = True
 
     @property
+    def external(self):
+        if self._external is not None:
+            return self._external
+        raise RuntimeError('image has to be set first')
+
+    @property
     def image(self):
-        return self._image
+        if self._image is not None:
+            return self._image
+        raise RuntimeError('image has to be set first')
 
     @property
     def name(self):
-        return self._name
+        if self._name is not None:
+            return self._name
+        raise RuntimeError('image has to be set first')
 
     @name.setter
     def name(self, name: str):
         if self._external:
             raise ValueError('Cannot change name of external image')
-        self._name = name
+        self._name = name  # TODO: any error checking?
 
 
 class ItemEnvelope(Item):

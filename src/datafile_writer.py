@@ -1,9 +1,9 @@
 from collections import defaultdict
 from constants import EnumItemType
-from map_structs import CHeaderV4, CItemHeader, CItemInfo, CItemType, CItemVersion, CVersionHeader
+from map_structs import CHeaderV4, CItemHeader, CItemImage, CItemInfo, CItemType, CItemVersion, CVersionHeader
 from stringfile import StringFile
 from structs import c_rawstr4, c_int32, c_struct, c_type
-from items import Item, ItemInfo, ItemVersion
+from items import Item, ItemImage, ItemInfo, ItemVersion
 import zlib
 
 
@@ -23,20 +23,19 @@ class DataFileWriter:
             self._register_item_version(item)
         elif isinstance(item, ItemInfo):
             self._register_item_info(item)
+        elif isinstance(item, ItemImage):
+            self._register_item_image(item)
         else:
             raise NotImplementedError()
 
     def _register_item_version(self, item: ItemVersion):
-        self._item_types[EnumItemType.VERSION] += 1
-
         c_item = CItemVersion()
         c_item.version = c_int32(item.version)
 
+        self._item_types[EnumItemType.VERSION] += 1
         self._items[EnumItemType.VERSION].append(c_item)
 
     def _register_item_info(self, item: ItemInfo):
-        self._item_types[EnumItemType.INFO] += 1
-
         author_ptr = -1
         mapversion_ptr = -1
         credits_ptr = -1
@@ -62,7 +61,25 @@ class DataFileWriter:
         c_item.license_ptr = c_int32(license_ptr)
         c_item.settings_ptr = c_int32(settings_ptr)
 
+        self._item_types[EnumItemType.INFO] += 1
         self._items[EnumItemType.INFO].append(c_item)
+
+    def _register_item_image(self, item: ItemImage):
+        name_ptr = self._register_data_str(item.name)
+        data_ptr = -1
+        if not item.external:
+            data_ptr = self._register_data(item.image.tobytes())  # type: ignore
+
+        c_item = CItemImage()
+        c_item.version = c_int32(1)
+        c_item.width = c_int32(item.image.width)
+        c_item.height = c_int32(item.image.height)
+        c_item.external = c_int32(item.external)
+        c_item.name_ptr = c_int32(name_ptr)
+        c_item.data_ptr = c_int32(data_ptr)
+
+        self._item_types[EnumItemType.IMAGE] += 1
+        self._items[EnumItemType.IMAGE].append(c_item)
 
     def _register_data_str_list(self, data: list[str]):
         byte_data = b''
@@ -71,7 +88,7 @@ class DataFileWriter:
         return self._register_data(byte_data)
 
     def _register_data_str(self, data: str):
-        return self._register_data((data).encode('utf8') + b'\0')
+        return self._register_data(data.encode('utf8') + b'\0')
 
     def _register_data(self, data: bytes):
         self._data_offsets.append(len(self._data))

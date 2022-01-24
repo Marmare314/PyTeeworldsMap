@@ -63,24 +63,24 @@ class TWMap:
         pass
 
 
-with open('test_maps/testmap.map', 'rb') as file:
-    map_content = file.read()
+# with open('test_maps/HeyTux2.map', 'rb') as file:
+#     map_content = file.read()
 
-m = TWMap()
-m.open(map_content)
+# m = TWMap()
+# m.open(map_content)
 
-print(m.info.author)
-print(m.info.mapversion)
-print(m.info.credits)
-print(m.info.license)
-print(m.info.settings)
+# print(m.info.author)
+# print(m.info.mapversion)
+# print(m.info.credits)
+# print(m.info.license)
+# print(m.info.settings)
 
-saved_content = m.save('test_maps/HeyTux2Saved.map')
+# saved_content = m.save('test_maps/HeyTux2Saved.map')
 
-m.open(saved_content)
+# m.open(saved_content)
 
-print(m.info.author)
-print(m.info.mapversion)
-print(m.info.credits)
-print(m.info.license)
-print(m.info.settings)
+# print(m.info.author)
+# print(m.info.mapversion)
+# print(m.info.credits)
+# print(m.info.license)
+# print(m.info.settings)
