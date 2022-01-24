@@ -292,8 +292,17 @@ class TileLayer(ItemLayer):
         self._color_envelope_ref = item
 
     @property
+    def color_envelope_offset(self):
+        return self._color_envelope_offset
+
+    @color_envelope_offset.setter
+    def color_envelope_offset(self, value: int):
+        assert c_int32.fits_value(value)
+        self._color_envelope_offset = value
+
+    @property
     def image(self):
-        self._image_ref
+        return self._image_ref
 
     @image.setter
     def image(self, item: Optional[ItemImage]):
@@ -404,7 +413,46 @@ class TileLayer(ItemLayer):
             return f'<tile_layer: [{self._item_id}]>'
 
 
+# TODO: consider adding tiles to argument
 class VanillaTileLayer(TileLayer):
+    # def __init__(self,
+    #              manager: ItemManager,
+    #              width: int,
+    #              height: int,
+    #              tiles: VanillaTileManager,
+    #              color_envelope_ref: Optional[ItemEnvelope] = None,
+    #              image_ref: Optional[ItemImage] = None,
+    #              color_envelope_offset: int = 0,
+    #              color: ColorTuple = (0, 0, 0, 0),
+    #              detail: bool = False,
+    #              is_game: bool = False,
+    #              is_tele: bool = False,
+    #              is_speedup: bool = False,
+    #              is_front: bool = False,
+    #              is_switch: bool = False,
+    #              is_tune: bool = False,
+    #              name: str = '',
+    #              _id: Optional[int] = None):
+    #     super().__init__(
+    #         manager=manager,
+    #         width=width,
+    #         height=height,
+    #         tiles=tiles,
+    #         color_envelope_ref=color_envelope_ref,
+    #         image_ref=image_ref,
+    #         color_envelope_offset=color_envelope_offset,
+    #         color=color,
+    #         detail=detail,
+    #         is_game=is_game,
+    #         is_tele=is_tele,
+    #         is_speedup=is_speedup,
+    #         is_front=is_front,
+    #         is_switch=is_switch,
+    #         is_tune=is_tune,
+    #         name=name,
+    #         _id=_id
+    #     )
+
     @property
     def tiles(self):
         return self._tiles

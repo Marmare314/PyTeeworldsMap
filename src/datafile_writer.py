@@ -1,11 +1,12 @@
 # pyright: reportPrivateUsage=false
+# TODO: write getter for id
 
 from collections import defaultdict
 from constants import EnumItemType
-from map_structs import CHeaderV4, CItemGroup, CItemHeader, CItemImage, CItemInfo, CItemType, CItemVersion, CVersionHeader
+from map_structs import CHeaderV4, CItemGroup, CItemHeader, CItemImage, CItemInfo, CItemLayer, CItemTileLayer, CItemType, CItemVersion, CVersionHeader
 from stringfile import StringFile
-from structs import c_intstr3, c_rawstr4, c_int32, c_struct, c_type
-from items import Item, ItemGroup, ItemImage, ItemInfo, ItemLayer, ItemVersion
+from structs import c_i32_color, c_intstr3, c_rawstr4, c_int32, c_struct
+from items import Item, ItemGroup, ItemImage, ItemInfo, ItemLayer, ItemVersion, QuadLayer, SoundLayer, TileLayer
 import zlib
 
 
@@ -14,7 +15,7 @@ class DataFileWriter:
         self._data_file = StringFile(b'')
 
         self._item_types: defaultdict[int, int] = defaultdict(int)
-        self._items: defaultdict[int, list[c_type | c_struct]] = defaultdict(list)
+        self._items: defaultdict[int, list[list[c_struct]]] = defaultdict(list)
 
         self._data = StringFile(b'')
         self._data_offsets: list[int] = []
@@ -28,9 +29,9 @@ class DataFileWriter:
         elif isinstance(item, ItemImage):
             self._register_item_image(item)
         elif isinstance(item, ItemLayer):
-            pass
+            self._register_item_layer(item)
         elif isinstance(item, ItemGroup):
-            pass
+            self._register_item_group(item)
         else:
             raise NotImplementedError()
 
@@ -39,7 +40,7 @@ class DataFileWriter:
         c_item.version = c_int32(item.version)
 
         self._item_types[EnumItemType.VERSION] += 1
-        self._items[EnumItemType.VERSION].append(c_item)
+        self._items[EnumItemType.VERSION].append([c_item])
 
     def _register_item_info(self, item: ItemInfo):
         author_ptr = -1
@@ -68,7 +69,7 @@ class DataFileWriter:
         c_item.settings_ptr = c_int32(settings_ptr)
 
         self._item_types[EnumItemType.INFO] += 1
-        self._items[EnumItemType.INFO].append(c_item)
+        self._items[EnumItemType.INFO].append([c_item])
 
     def _register_item_image(self, item: ItemImage):
         name_ptr = self._register_data_str(item.name)
@@ -85,9 +86,81 @@ class DataFileWriter:
         c_item.data_ptr = c_int32(data_ptr)
 
         self._item_types[EnumItemType.IMAGE] += 1
-        self._items[EnumItemType.IMAGE].append(c_item)
+        self._items[EnumItemType.IMAGE].append([c_item])
 
     def _register_item_layer(self, item: ItemLayer):
+        if isinstance(item, TileLayer):
+            c_items = self._construct_item_tile_layer(item)
+        else:
+            raise NotImplementedError()
+
+        self._item_types[EnumItemType.LAYER] += 1
+        self._items[EnumItemType.LAYER].append(c_items)
+
+    def _construct_item_tile_layer(self, item: TileLayer) -> list[c_struct]:
+        c_item_header = CItemLayer()
+        c_item_header._version = c_int32(-1)
+        c_item_header.type = c_int32(2)
+        c_item_header.flags = c_int32(item.detail)
+
+        c_item_body = CItemTileLayer()
+        c_item_body.version = c_int32(3)
+        c_item_body.width = c_int32(item.width)
+        c_item_body.height = c_int32(item.height)
+        c_item_body.color = c_i32_color.from_values(*item.color)
+        c_item_body.color_envelope_offset = c_int32(item.color_envelope_offset)
+
+        # TODO: is this actually correct to create a new layer for every ddnet layer?
+        stored_data_ptr = c_int32(self._register_data(item._tiles.raw_data))
+
+        c_item_body.flags = c_int32(0)
+        c_item_body.data_ptr = stored_data_ptr
+        c_item_body.data_tele_ptr = c_int32(-1)
+        c_item_body.data_speedup_ptr = c_int32(-1)
+        c_item_body.data_front_ptr = c_int32(-1)
+        c_item_body.data_switch_ptr = c_int32(-1)
+        c_item_body.data_tune_ptr = c_int32(-1)
+        if item.is_game:
+            c_item_body.flags = c_int32(1)
+        elif item.is_tele:
+            c_item_body.flags = c_int32(2)
+            c_item_body.data_tele_ptr = stored_data_ptr
+            c_item_body.data_ptr = c_int32(self._register_data(bytes(item.width * item.height * 2)))
+        elif item.is_speedup:
+            c_item_body.flags = c_int32(4)
+            c_item_body.data_speedup_ptr = stored_data_ptr
+            c_item_body.data_ptr = c_int32(self._register_data(bytes(item.width * item.height * 6)))
+        elif item.is_front:
+            c_item_body.flags = c_int32(8)
+            c_item_body.data_front_ptr = stored_data_ptr
+            c_item_body.data_ptr = c_int32(self._register_data(bytes(item.width * item.height * 4)))
+        elif item.is_switch:
+            c_item_body.flags = c_int32(16)
+            c_item_body.data_switch_ptr = stored_data_ptr
+            c_item_body.data_ptr = c_int32(self._register_data(bytes(item.width * item.height * 4)))
+        elif item.is_tune:
+            c_item_body.flags = c_int32(32)
+            c_item_body.data_tune_ptr = stored_data_ptr
+            c_item_body.data_ptr = c_int32(self._register_data(bytes(item.width * item.height * 2)))
+
+        if item.color_envelope is None:
+            c_item_body.color_envelope_ref = c_int32(-1)
+        else:
+            c_item_body.color_envelope_ref = c_int32(item.color_envelope._item_id)
+
+        if item.image is None:
+            c_item_body.image_ref = c_int32(-1)
+        else:
+            c_item_body.image_ref = c_int32(item.image._item_id)
+
+        c_item_body.name = c_intstr3(item.name)
+
+        return [c_item_header, c_item_body]
+
+    def _construct_item_quad_layer(self, item: QuadLayer):
+        pass
+
+    def _construct_item_sound_layer(self, item: SoundLayer):
         pass
 
     def _register_item_group(self, item: ItemGroup):
@@ -97,6 +170,12 @@ class DataFileWriter:
         c_item.y_offset = c_int32(item.y_offset)
         c_item.x_parallax = c_int32(item.x_parallax)
         c_item.y_parallax = c_int32(item.y_parallax)
+
+        # TODO: raise error when all layers have been implemented
+        if len(item.layers) == 0:
+            # raise NotImplementedError('group without layers cannot be handled yet')
+            return
+
         c_item.start_layer = c_int32(item.layers[0]._item_id)
         c_item.num_layers = c_int32(len(item.layers))
 
@@ -109,7 +188,7 @@ class DataFileWriter:
         c_item.name = c_intstr3(item.name)
 
         self._item_types[EnumItemType.GROUP] += 1
-        self._items[EnumItemType.GROUP].append(c_item)
+        self._items[EnumItemType.GROUP].append([c_item])
 
     def _register_data_str_list(self, data: list[str]):
         byte_data = b''
@@ -139,8 +218,8 @@ class DataFileWriter:
     def _get_item_size(self):
         item_size = 0
         for type_id in sorted(self._items):
-            for item in self._items[type_id]:
-                item_size += item.size_bytes() + CItemHeader.size_bytes()
+            for item_list in self._items[type_id]:
+                item_size += sum([item.size_bytes() for item in item_list]) + CItemHeader.size_bytes()
         return item_size
 
     def _get_num_items(self):
@@ -150,7 +229,7 @@ class DataFileWriter:
         return num_items
 
     def _get_swaplen(self):
-        swaplen = 5 * c_int32.size_bytes()  # remaining header
+        swaplen = CHeaderV4.size_bytes() - 2 * c_int32.size_bytes()  # remaining header
         swaplen += len(self._item_types) * CItemType.size_bytes()
         swaplen += len(self._get_item_offsets()) * c_int32.size_bytes()
         swaplen += 2 * len(self._data_offsets) * c_int32.size_bytes()
@@ -190,9 +269,9 @@ class DataFileWriter:
         offsets: list[int] = []
         next_offset = 0
         for type_id in sorted(self._items):
-            for item in self._items[type_id]:
+            for item_list in self._items[type_id]:
                 offsets.append(next_offset)
-                next_offset += item.size_bytes() + CItemHeader.size_bytes()
+                next_offset += sum([item.size_bytes() for item in item_list]) + CItemHeader.size_bytes()
         return offsets
 
     def _write_size_indicators(self):
@@ -207,8 +286,8 @@ class DataFileWriter:
 
     def _write_items(self):
         for type_id in sorted(self._items):
-            for index, item in enumerate(self._items[type_id]):
-                item_bytes = item.to_bytes()
+            for index, item_list in enumerate(self._items[type_id]):
+                item_bytes = b''.join([item.to_bytes() for item in item_list])
 
                 combined = index | (type_id << 16)
 
@@ -227,6 +306,5 @@ class DataFileWriter:
         self._write_items()
         self._data_file.append(self._data.read_all())
 
-        return self._data_file.read_all()
-        # with open(path, 'wb') as file:
-        #     file.write(self._data_file.read_all())
+        with open(path, 'wb') as file:
+            file.write(self._data_file.read_all())

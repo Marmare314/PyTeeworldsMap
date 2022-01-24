@@ -127,10 +127,11 @@ class c_intstr_impl(c_str_impl):
     @classmethod
     def _encode(cls, msg: str):
         byte_msg = b''
+        msg = msg.ljust(cls._length, '\0')
         for i in range(0, len(msg), 4):
             for b in msg[i:i+4][::-1]:
                 byte_msg += bytes([safe_ord(b) + 128])
-        return byte_msg.zfill(cls._length)
+        return byte_msg
 
     @classmethod
     def _decode(cls, msg: bytes):
@@ -182,6 +183,15 @@ class c_i32_color(c_struct):
     g: c_int32
     b: c_int32
     a: c_int32
+
+    @staticmethod
+    def from_values(r: int, g: int, b: int, a: int):
+        col = c_i32_color()
+        col.r = c_int32(r)
+        col.g = c_int32(g)
+        col.b = c_int32(b)
+        col.a = c_int32(a)
+        return col
 
     @property
     def value(self):

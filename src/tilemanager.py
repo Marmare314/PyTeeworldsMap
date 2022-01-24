@@ -84,6 +84,10 @@ class TileManager:
     def height(self):
         return self._height
 
+    @property
+    def raw_data(self):
+        return self._data
+
 
 class VanillaTileManager(TileManager):
     def __init__(self, width: int, height: int, game_tiles: bool, data: bytes):
