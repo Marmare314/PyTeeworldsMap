@@ -84,11 +84,24 @@ class ItemManager:
         self._item_set = set()
 
     @property
+    def version(self):
+        for item in self._item_set:
+            if isinstance(item, ItemVersion):
+                return item
+        raise RuntimeError('ItemManager should always have a version item')
+
+    @property
     def info(self):
         for item in self._item_set:
             if isinstance(item, ItemInfo):
                 return item
         raise RuntimeError('ItemManager should always have an info item')
+
+    @property
+    def images(self):
+        for item in sorted(self._item_set):
+            if isinstance(item, ItemImage):
+                yield item
 
     @property
     def _layers(self):

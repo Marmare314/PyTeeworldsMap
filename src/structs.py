@@ -22,6 +22,9 @@ class c_type:
     def from_data(cls, data: StringFile) -> 'c_type':
         raise NotImplementedError()
 
+    def to_bytes(self) -> bytes:
+        raise NotImplementedError()
+
     @classmethod
     def size_bytes(cls) -> int:
         raise NotImplementedError()
@@ -54,6 +57,9 @@ class c_int_impl(c_type):
     @classmethod
     def from_data(cls, data: StringFile) -> 'c_int_impl':
         return cls(int.from_bytes(data.read(cls._num_bytes), byteorder='little', signed=cls._signed))
+
+    def to_bytes(self):
+        return self._value.to_bytes(self._num_bytes, byteorder='little', signed=self._signed)
 
     @classmethod
     def size_bytes(cls) -> int:
@@ -96,6 +102,9 @@ class c_str_impl(c_type):
     @classmethod
     def from_data(cls, data: StringFile) -> 'c_str_impl':
         return cls(cls._decode(data.read(cls._length)))
+
+    def to_bytes(self):
+        return self._encode(self._value)
 
     @classmethod
     def size_bytes(cls) -> int:
@@ -153,6 +162,12 @@ class c_struct:
             setattr(instance, var_name, attr_type.from_data(data))
 
         return instance
+
+    def to_bytes(self):
+        ret = b''
+        for var_name in self.__annotations__:
+            ret += getattr(self, var_name).to_bytes()
+        return ret
 
     @classmethod
     def size_bytes(cls) -> int:

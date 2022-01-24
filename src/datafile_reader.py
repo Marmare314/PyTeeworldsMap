@@ -16,9 +16,8 @@ T = TypeVar('T')
 
 
 class DataFileReader:
-    def __init__(self, path: str):
-        with open(path, 'rb') as file:
-            self._data = StringFile(file.read())
+    def __init__(self, file_data: bytes):
+        self._data = StringFile(file_data)
 
         self._ver_header = CVersionHeader.from_data(self._data)
         if self._ver_header.magic.value not in ['DATA', 'ATAD']:
@@ -58,7 +57,7 @@ class DataFileReader:
         return self._get_data(data_ptr)[:-1].decode('utf8')
 
     def _get_data_str_list(self, data_ptr: int):
-        return ['']
+        return [s.decode('utf8') for s in self._get_data(data_ptr).split(b'\0')[:-1]]
 
     def _get_type_start(self, type_id: EnumItemType):
         for item_type in self._item_types:
@@ -139,15 +138,15 @@ class DataFileReader:
         license = ''
         settings: list[str] = []
 
-        if item.author_ptr.value > 0:
+        if item.author_ptr.value >= 0:
             author = self._get_data_str(item.author_ptr.value)
-        if item.map_version_ptr.value > 0:
+        if item.map_version_ptr.value >= 0:
             mapversion = self._get_data_str(item.map_version_ptr.value)
-        if item.credits_ptr.value > 0:
+        if item.credits_ptr.value >= 0:
             credits = self._get_data_str(item.credits_ptr.value)
-        if item.license_ptr.value > 0:
+        if item.license_ptr.value >= 0:
             license = self._get_data_str(item.license_ptr.value)
-        if item.settings_ptr.value > 0:
+        if item.settings_ptr.value >= 0:
             settings = self._get_data_str_list(item.settings_ptr.value)
 
         ret_item = ItemInfo(author, mapversion, credits, license, settings)
@@ -164,7 +163,7 @@ class DataFileReader:
                 raise RuntimeError('unexpected tilelayer version')
 
             name = ''
-            if item.name_ptr.value > 0:
+            if item.name_ptr.value >= 0:
                 name = self._get_data_str(item.name_ptr.value)
 
             image = ItemImage()
@@ -208,12 +207,12 @@ class DataFileReader:
 
         env_ref: Optional[ItemEnvelope] = None
         env_ref_id = item_data.color_envelope_ref.value
-        if env_ref_id > 0:
+        if env_ref_id >= 0:
             env_ref = self._set_id(ItemEnvelope(), env_ref_id)
 
         image_ref: Optional[ItemImage] = None
         image_ref_id = item_data.image_ref.value
-        if image_ref_id > 0:
+        if image_ref_id >= 0:
             image_ref = self._set_id(ItemImage(), image_ref_id)
 
         width = item_data.width.value
