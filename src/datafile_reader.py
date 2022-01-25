@@ -280,6 +280,8 @@ class DataFileReader:
                 # TODO: enable when all layers have been implemented
                 # else:
                 #     raise RuntimeError('')
+            if len(layer_refs) == 0:
+                continue  # TODO: disable when all layers have been implemented
 
             ItemGroup(
                 manager=self._item_manager,

@@ -2,6 +2,7 @@ from constants import EnumTileFlag, EnumTileType
 from typing import Optional
 
 
+# TODO: these are unneccessary
 class Tile:
     def __init__(self, data: Optional[memoryview]):
         self._data = data
@@ -88,11 +89,14 @@ class TileManager:
         begin = (x + y * self._width) * self._tile_bytes
         return self._data[begin:begin+self._tile_bytes]
 
-    def get_tilebyte(self, x: int, y: int, num_byte: int):
+    def _get_tilebyte(self, x: int, y: int, num_byte: int):
         self._check_coords(x, y)
         assert 0 <= num_byte < self._tile_bytes
         begin = (x + y * self._width) * self._tile_bytes
         return self._data[begin+num_byte]
+
+    def get_id(self, x: int, y: int) -> int:
+        raise NotImplementedError()
 
     @property
     def width(self):
@@ -114,18 +118,36 @@ class VanillaTileManager(TileManager):
         self._check_coords(x, y)
         return VanillaTile.from_data(self._get_data(x, y))
 
+    def get_id(self, x: int, y: int) -> int:
+        return self._get_tilebyte(x, y, 0)
+
+    def get_flags_int(self, x: int, y: int) -> int:
+        return self._get_tilebyte(x, y, 1)
+
 
 class TeleTileManager(TileManager):
     _tile_bytes = 2
+
+    def get_id(self, x: int, y: int) -> int:
+        return self._get_tilebyte(x, y, 1)
 
 
 class SpeedupTileManager(TileManager):
     _tile_bytes = 6
 
+    def get_id(self, x: int, y: int) -> int:
+        return self._get_tilebyte(x, y, 1)
+
 
 class SwitchTileManager(TileManager):
     _tile_bytes = 4
 
+    def get_id(self, x: int, y: int) -> int:
+        return self._get_tilebyte(x, y, 1)
+
 
 class TuneTileManager(TileManager):
     _tile_bytes = 2
+
+    def get_id(self, x: int, y: int) -> int:
+        return self._get_tilebyte(x, y, 1)

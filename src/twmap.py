@@ -6,6 +6,7 @@ from items import ItemManager, VanillaTileLayer
 
 
 # TODO: make exceptions/asserts consistent
+# TODO: try to remove type ignores
 
 
 class TWMap:
@@ -49,6 +50,14 @@ class TWMap:
     @property
     def info(self):
         return self._item_manager.info
+
+    @property
+    def images(self):
+        return list(self._item_manager.images)
+
+    @property
+    def layers(self):
+        return list(self._item_manager.layers)
 
     @property
     def groups(self):
