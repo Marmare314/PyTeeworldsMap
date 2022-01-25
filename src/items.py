@@ -20,15 +20,19 @@ class ItemManager:
     def __init__(self):
         self._item_set: set[Item] = set()
 
-        version = ItemVersion(self, 3)
-        info = ItemInfo(self)
-        game_layer = TileLayer(self, 100, 100, is_game=True, name='Game')
-        game_group = ItemGroup(self, [game_layer], name='Game')
-
-        self.register(version)
-        self.register(info)
-        self.register(game_layer)
-        self.register(game_group)
+        ItemVersion(manager=self, version=3)
+        ItemInfo(manager=self)
+        game_layer = VanillaTileLayer(
+            manager=self,
+            width=100,
+            height=100,
+            name='Game'
+        )
+        ItemGroup(
+            manager=self,
+            layers=[game_layer],
+            name='Game'
+        )
 
     def find_item(self, item_type: 'Type[T]', id: int) -> Optional[T]:
         for item in self._item_set:
@@ -188,6 +192,14 @@ class ItemImage(Item):
     def name(self):
         return self._name
 
+    @property
+    def width(self):
+        return self._image.width
+
+    @property
+    def height(self):
+        return self._image.height
+
 
 class ItemImageInternal(ItemImage):
     def __init__(self,
@@ -248,6 +260,7 @@ class TileLayer(ItemLayer):
                  manager: ItemManager,
                  width: int,
                  height: int,
+                 tiles: TileManager,
                  color_envelope_ref: Optional[ItemEnvelope] = None,
                  image_ref: Optional[ItemImage] = None,
                  color_envelope_offset: int = 0,
@@ -278,8 +291,9 @@ class TileLayer(ItemLayer):
         self._color_envelope_offset = color_envelope_offset
         self.color = color
 
-        # TODO: this is a bit memory inefficient when loading a file
-        self._tiles = TileManager(width, height, bytes(width * height))
+        self._tiles = tiles
+        assert self._tiles.width == width
+        assert self._tiles.height == height
 
     @property
     def color_envelope(self):
@@ -413,45 +427,49 @@ class TileLayer(ItemLayer):
             return f'<tile_layer: [{self._item_id}]>'
 
 
-# TODO: consider adding tiles to argument
+# TODO: this can maybe made nicer with type templates
 class VanillaTileLayer(TileLayer):
-    # def __init__(self,
-    #              manager: ItemManager,
-    #              width: int,
-    #              height: int,
-    #              tiles: VanillaTileManager,
-    #              color_envelope_ref: Optional[ItemEnvelope] = None,
-    #              image_ref: Optional[ItemImage] = None,
-    #              color_envelope_offset: int = 0,
-    #              color: ColorTuple = (0, 0, 0, 0),
-    #              detail: bool = False,
-    #              is_game: bool = False,
-    #              is_tele: bool = False,
-    #              is_speedup: bool = False,
-    #              is_front: bool = False,
-    #              is_switch: bool = False,
-    #              is_tune: bool = False,
-    #              name: str = '',
-    #              _id: Optional[int] = None):
-    #     super().__init__(
-    #         manager=manager,
-    #         width=width,
-    #         height=height,
-    #         tiles=tiles,
-    #         color_envelope_ref=color_envelope_ref,
-    #         image_ref=image_ref,
-    #         color_envelope_offset=color_envelope_offset,
-    #         color=color,
-    #         detail=detail,
-    #         is_game=is_game,
-    #         is_tele=is_tele,
-    #         is_speedup=is_speedup,
-    #         is_front=is_front,
-    #         is_switch=is_switch,
-    #         is_tune=is_tune,
-    #         name=name,
-    #         _id=_id
-    #     )
+    def __init__(self,
+                 manager: ItemManager,
+                 width: int,
+                 height: int,
+                 tiles: Optional[VanillaTileManager] = None,
+                 color_envelope_ref: Optional[ItemEnvelope] = None,
+                 image_ref: Optional[ItemImage] = None,
+                 color_envelope_offset: int = 0,
+                 color: ColorTuple = (0, 0, 0, 0),
+                 detail: bool = False,
+                 is_game: bool = False,
+                 is_tele: bool = False,
+                 is_speedup: bool = False,
+                 is_front: bool = False,
+                 is_switch: bool = False,
+                 is_tune: bool = False,
+                 name: str = '',
+                 _id: Optional[int] = None):
+
+        if tiles is None:
+            tiles = VanillaTileManager(width, height)
+
+        super().__init__(
+            manager=manager,
+            width=width,
+            height=height,
+            tiles=tiles,
+            color_envelope_ref=color_envelope_ref,
+            image_ref=image_ref,
+            color_envelope_offset=color_envelope_offset,
+            color=color,
+            detail=detail,
+            is_game=is_game,
+            is_tele=is_tele,
+            is_speedup=is_speedup,
+            is_front=is_front,
+            is_switch=is_switch,
+            is_tune=is_tune,
+            name=name,
+            _id=_id
+        )
 
     @property
     def tiles(self):
@@ -463,6 +481,48 @@ class VanillaTileLayer(TileLayer):
 
 
 class TeleTileLayer(TileLayer):
+    def __init__(self,
+                 manager: ItemManager,
+                 width: int,
+                 height: int,
+                 tiles: Optional[TeleTileManager] = None,
+                 color_envelope_ref: Optional[ItemEnvelope] = None,
+                 image_ref: Optional[ItemImage] = None,
+                 color_envelope_offset: int = 0,
+                 color: ColorTuple = (0, 0, 0, 0),
+                 detail: bool = False,
+                 is_game: bool = False,
+                 is_tele: bool = False,
+                 is_speedup: bool = False,
+                 is_front: bool = False,
+                 is_switch: bool = False,
+                 is_tune: bool = False,
+                 name: str = '',
+                 _id: Optional[int] = None):
+
+        if tiles is None:
+            tiles = TeleTileManager(width, height)
+
+        super().__init__(
+            manager=manager,
+            width=width,
+            height=height,
+            tiles=tiles,
+            color_envelope_ref=color_envelope_ref,
+            image_ref=image_ref,
+            color_envelope_offset=color_envelope_offset,
+            color=color,
+            detail=detail,
+            is_game=is_game,
+            is_tele=is_tele,
+            is_speedup=is_speedup,
+            is_front=is_front,
+            is_switch=is_switch,
+            is_tune=is_tune,
+            name=name,
+            _id=_id
+        )
+
     @property
     def tiles(self):
         return self._tiles
@@ -473,6 +533,48 @@ class TeleTileLayer(TileLayer):
 
 
 class SpeedupTileLayer(TileLayer):
+    def __init__(self,
+                 manager: ItemManager,
+                 width: int,
+                 height: int,
+                 tiles: Optional[SpeedupTileManager] = None,
+                 color_envelope_ref: Optional[ItemEnvelope] = None,
+                 image_ref: Optional[ItemImage] = None,
+                 color_envelope_offset: int = 0,
+                 color: ColorTuple = (0, 0, 0, 0),
+                 detail: bool = False,
+                 is_game: bool = False,
+                 is_tele: bool = False,
+                 is_speedup: bool = False,
+                 is_front: bool = False,
+                 is_switch: bool = False,
+                 is_tune: bool = False,
+                 name: str = '',
+                 _id: Optional[int] = None):
+
+        if tiles is None:
+            tiles = SpeedupTileManager(width, height)
+
+        super().__init__(
+            manager=manager,
+            width=width,
+            height=height,
+            tiles=tiles,
+            color_envelope_ref=color_envelope_ref,
+            image_ref=image_ref,
+            color_envelope_offset=color_envelope_offset,
+            color=color,
+            detail=detail,
+            is_game=is_game,
+            is_tele=is_tele,
+            is_speedup=is_speedup,
+            is_front=is_front,
+            is_switch=is_switch,
+            is_tune=is_tune,
+            name=name,
+            _id=_id
+        )
+
     @property
     def tiles(self):
         return self._tiles
@@ -483,6 +585,48 @@ class SpeedupTileLayer(TileLayer):
 
 
 class SwitchTileLayer(TileLayer):
+    def __init__(self,
+                 manager: ItemManager,
+                 width: int,
+                 height: int,
+                 tiles: Optional[SwitchTileManager] = None,
+                 color_envelope_ref: Optional[ItemEnvelope] = None,
+                 image_ref: Optional[ItemImage] = None,
+                 color_envelope_offset: int = 0,
+                 color: ColorTuple = (0, 0, 0, 0),
+                 detail: bool = False,
+                 is_game: bool = False,
+                 is_tele: bool = False,
+                 is_speedup: bool = False,
+                 is_front: bool = False,
+                 is_switch: bool = False,
+                 is_tune: bool = False,
+                 name: str = '',
+                 _id: Optional[int] = None):
+
+        if tiles is None:
+            tiles = SwitchTileManager(width, height)
+
+        super().__init__(
+            manager=manager,
+            width=width,
+            height=height,
+            tiles=tiles,
+            color_envelope_ref=color_envelope_ref,
+            image_ref=image_ref,
+            color_envelope_offset=color_envelope_offset,
+            color=color,
+            detail=detail,
+            is_game=is_game,
+            is_tele=is_tele,
+            is_speedup=is_speedup,
+            is_front=is_front,
+            is_switch=is_switch,
+            is_tune=is_tune,
+            name=name,
+            _id=_id
+        )
+
     @property
     def tiles(self):
         return self._tiles
@@ -493,6 +637,48 @@ class SwitchTileLayer(TileLayer):
 
 
 class TuneTileLayer(TileLayer):
+    def __init__(self,
+                 manager: ItemManager,
+                 width: int,
+                 height: int,
+                 tiles: Optional[TuneTileManager] = None,
+                 color_envelope_ref: Optional[ItemEnvelope] = None,
+                 image_ref: Optional[ItemImage] = None,
+                 color_envelope_offset: int = 0,
+                 color: ColorTuple = (0, 0, 0, 0),
+                 detail: bool = False,
+                 is_game: bool = False,
+                 is_tele: bool = False,
+                 is_speedup: bool = False,
+                 is_front: bool = False,
+                 is_switch: bool = False,
+                 is_tune: bool = False,
+                 name: str = '',
+                 _id: Optional[int] = None):
+
+        if tiles is None:
+            tiles = TuneTileManager(width, height)
+
+        super().__init__(
+            manager=manager,
+            width=width,
+            height=height,
+            tiles=tiles,
+            color_envelope_ref=color_envelope_ref,
+            image_ref=image_ref,
+            color_envelope_offset=color_envelope_offset,
+            color=color,
+            detail=detail,
+            is_game=is_game,
+            is_tele=is_tele,
+            is_speedup=is_speedup,
+            is_front=is_front,
+            is_switch=is_switch,
+            is_tune=is_tune,
+            name=name,
+            _id=_id
+        )
+
     @property
     def tiles(self):
         return self._tiles
