@@ -226,8 +226,6 @@ class DataFileReader:
 
         layer_type(
             manager=self._item_manager,
-            width=width,
-            height=height,
             tiles=tile_manager,  # type: ignore
             color_envelope_ref=env_ref,
             image_ref=image_ref,

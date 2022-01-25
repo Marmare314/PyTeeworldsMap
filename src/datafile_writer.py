@@ -9,6 +9,8 @@ from structs import c_i32_color, c_intstr3, c_rawstr4, c_int32, c_struct
 from items import Item, ItemGroup, ItemImage, ItemInfo, ItemLayer, ItemVersion, QuadLayer, SoundLayer, TileLayer
 import zlib
 
+from tilemanager import TileManager
+
 
 class DataFileWriter:
     def __init__(self):
@@ -90,14 +92,14 @@ class DataFileWriter:
 
     def _register_item_layer(self, item: ItemLayer):
         if isinstance(item, TileLayer):
-            c_items = self._construct_item_tile_layer(item)
+            c_items = self._construct_item_tile_layer(item)  # type: ignore
         else:
             raise NotImplementedError()
 
         self._item_types[EnumItemType.LAYER] += 1
         self._items[EnumItemType.LAYER].append(c_items)
 
-    def _construct_item_tile_layer(self, item: TileLayer) -> list[c_struct]:
+    def _construct_item_tile_layer(self, item: TileLayer[TileManager]) -> list[c_struct]:
         c_item_header = CItemLayer()
         c_item_header._version = c_int32(-1)
         c_item_header.type = c_int32(2)
