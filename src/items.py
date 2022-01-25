@@ -54,9 +54,20 @@ class ItemManager:
         ids = self._get_ids_type(item_type)
         return next(filterfalse(set(ids).__contains__, count(0)))
 
-    def minimize_ids(self):
-        pass
+    def clean_ids(self):
+        for i, image in enumerate(self.images):
+            image._item_id = i
 
+        for i, group in enumerate(self.groups):
+            group._item_id = i
+
+        total_layers = 0
+        for group in self.groups:
+            for i, layer in enumerate(group.layers):
+                layer._item_id = total_layers + i
+            total_layers += len(group.layers)
+
+    # TODO: make sure that only one version item with id=0 is registered (also info)
     def register(self, item: 'Item'):
         if item._item_manager != self:
             raise NotImplementedError()  # TODO: add copy of item
@@ -71,7 +82,7 @@ class ItemManager:
         self._item_set.add(item)
 
     def validate(self, item: 'Item'):
-        pass
+        pass  # TODO
 
     def clear(self):
         self._item_set = set()

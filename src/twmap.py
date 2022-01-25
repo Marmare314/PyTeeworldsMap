@@ -31,7 +31,7 @@ class TWMap:
     def save(self, path: str):
         data = DataFileWriter()
 
-        # self._item_manager.minimize_ids()  # TODO: instead -> also sort layers
+        self._item_manager.clean_ids()
 
         data.register_item(self._item_manager.version)
         data.register_item(self._item_manager.info)
