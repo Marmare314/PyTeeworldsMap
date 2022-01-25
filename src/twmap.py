@@ -5,6 +5,9 @@ from datafile_writer import DataFileWriter
 from items import ItemManager, VanillaTileLayer
 
 
+# TODO: make exceptions/asserts consistent
+
+
 class TWMap:
     def __init__(self):
         self._item_manager = ItemManager()
@@ -62,5 +65,6 @@ class TWMap:
 
 if __name__ == '__main__':
     m = TWMap()
-    m.open('../test_maps/HeyTux2.map')
-    m.save('../test_maps/HeyTux2Saved.map')
+    m.open('../test_maps/XmasMove.map')
+    # m.save('../test_maps/XmasMoveSaved.map')
+    m.save('/home/marek/.teeworlds/maps/XmasMoveSaved.map')

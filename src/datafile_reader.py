@@ -195,14 +195,26 @@ class DataFileReader:
         is_tune = EnumTileLayerFlags.TUNE & flags > 0
 
         layer_type = VanillaTileLayer
+        manager_type = VanillaTileManager
+        data_ptr = item.data_ptr.value
         if is_tele:
             layer_type = TeleTileLayer
+            manager_type = TeleTileManager
+            data_ptr = item.data_tele_ptr.value
         elif is_speedup:
             layer_type = SpeedupTileLayer
+            manager_type = SpeedupTileManager
+            data_ptr = item.data_speedup_ptr.value
+        elif is_front:
+            data_ptr = item.data_front_ptr.value
         elif is_switch:
             layer_type = SwitchTileLayer
+            manager_type = SwitchTileManager
+            data_ptr = item.data_switch_ptr.value
         elif is_tune:
             layer_type = TuneTileLayer
+            manager_type = TuneTileManager
+            data_ptr = item.data_tune_ptr.value
 
         env_ref: Optional[ItemEnvelope] = self._item_manager.find_item(ItemEnvelope, item.color_envelope_ref.value)
 
@@ -210,10 +222,13 @@ class DataFileReader:
 
         width = item.width.value
         height = item.height.value
-        layer = layer_type(
+        tile_manager = manager_type(width, height, data=self._get_data(data_ptr))
+
+        layer_type(
             manager=self._item_manager,
             width=width,
             height=height,
+            tiles=tile_manager,  # type: ignore
             color_envelope_ref=env_ref,
             image_ref=image_ref,
             color_envelope_offset=item.color_envelope_offset.value,
@@ -228,25 +243,6 @@ class DataFileReader:
             name=item.name.value,
             _id=index
         )
-
-        # TODO: can this be made nicer?
-        if isinstance(layer, VanillaTileLayer):
-            data_ptr = item.data_ptr.value
-            if is_front:
-                data_ptr = item.data_front_ptr.value
-            layer.tiles = VanillaTileManager(width, height, is_front | is_game, self._get_data(data_ptr))
-        elif isinstance(layer, TeleTileLayer):
-            data_ptr = item.data_tele_ptr.value
-            layer.tiles = TeleTileManager(width, height, self._get_data(data_ptr))
-        elif isinstance(layer, SpeedupTileLayer):
-            data_ptr = item.data_speedup_ptr.value
-            layer.tiles = SpeedupTileManager(width, height, self._get_data(data_ptr))
-        elif isinstance(layer, SwitchTileLayer):
-            data_ptr = item.data_switch_ptr.value
-            layer.tiles = SwitchTileManager(width, height, self._get_data(data_ptr))
-        else:
-            data_ptr = item.data_tune_ptr.value
-            layer.tiles = TuneTileManager(width, height, self._get_data(data_ptr))
 
     def _add_quad_layer(self, index: int, detail: bool):
         # if item_data.version.value != 3:

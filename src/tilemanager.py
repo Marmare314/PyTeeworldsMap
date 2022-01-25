@@ -1,4 +1,4 @@
-from constants import EnumTileFlag
+from constants import EnumTileFlag, EnumTileType
 from typing import Optional
 
 
@@ -6,10 +6,14 @@ class Tile:
     def __init__(self, data: Optional[memoryview]):
         self._data = data
 
+    def _set_byte(self, num_byte: int, value: int):
+        # TODO: check inputs
+        if self._data is not None:
+            self._data[num_byte] = value
+
 
 class VanillaTile(Tile):
     def __init__(self,
-                 game_tile: bool,
                  type: int,
                  v_flip: bool = False,
                  h_flip: bool = False,
@@ -18,25 +22,25 @@ class VanillaTile(Tile):
                  data: Optional[memoryview] = None):
         super().__init__(data)
 
-        self._game_tile = game_tile
         self._type = type
-        self.v_flip = v_flip
-        self.h_flip = h_flip
-        self.opaque = opaque
-        self.rotate = rotate
+        self._v_flip = v_flip
+        self._h_flip = h_flip
+        self._opaque = opaque
+        self._rotate = rotate
 
     @property
     def type(self):
         return self._type
 
     @type.setter
-    def type(self, type: int):
+    def type(self, type: int | EnumTileType):
+        self._set_byte(0, type)
         self._type = type
 
     @staticmethod
-    def from_data(game_tile: bool, data: memoryview):
+    def from_data(data: memoryview):
+        assert len(data) == 4
         return VanillaTile(
-            game_tile,
             data[0],
             EnumTileFlag.VFLIP & data[1] > 0,
             EnumTileFlag.HFLIP & data[1] > 0,
@@ -63,18 +67,32 @@ class TuneTile(Tile):
 
 
 class TileManager:
-    def __init__(self, width: int, height: int, data: bytes):
+    _tile_bytes: int
+
+    def __init__(self, width: int, height: int, data: Optional[bytes] = None):
+        needed_bytes = width * height * self._tile_bytes
+        if data is None:
+            self._data = memoryview(bytearray(needed_bytes))
+        else:
+            self._data = memoryview(bytearray(data))
+        assert len(self._data) == needed_bytes
         self._width = width
         self._height = height
-        self._data = memoryview(bytearray(data))
 
     def _check_coords(self, x: int, y: int):
         assert 0 <= x <= self._width
         assert 0 <= y <= self._height
 
-    def _get_data(self, x: int, y: int, num_bits: int):
-        begin = (x + y * self._width) * num_bits
-        return self._data[begin:begin + num_bits]
+    def _get_data(self, x: int, y: int):
+        self._check_coords(x, y)
+        begin = (x + y * self._width) * self._tile_bytes
+        return self._data[begin:begin+self._tile_bytes]
+
+    def get_tilebyte(self, x: int, y: int, num_byte: int):
+        self._check_coords(x, y)
+        assert 0 <= num_byte < self._tile_bytes
+        begin = (x + y * self._width) * self._tile_bytes
+        return self._data[begin+num_byte]
 
     @property
     def width(self):
@@ -90,26 +108,24 @@ class TileManager:
 
 
 class VanillaTileManager(TileManager):
-    def __init__(self, width: int, height: int, game_tiles: bool, data: bytes):
-        super().__init__(width, height, data)
-        self._game_tiles = game_tiles
+    _tile_bytes = 4
 
     def get_tile(self, x: int, y: int) -> VanillaTile:
         self._check_coords(x, y)
-        return VanillaTile.from_data(self._game_tiles, self._get_data(x, y, 4))
+        return VanillaTile.from_data(self._get_data(x, y))
 
 
 class TeleTileManager(TileManager):
-    pass
+    _tile_bytes = 2
 
 
 class SpeedupTileManager(TileManager):
-    pass
+    _tile_bytes = 6
 
 
 class SwitchTileManager(TileManager):
-    pass
+    _tile_bytes = 4
 
 
 class TuneTileManager(TileManager):
-    pass
+    _tile_bytes = 2
