@@ -1,6 +1,3 @@
-# pyright: reportPrivateUsage=false
-# TODO: write getter for id
-
 from collections import defaultdict
 from constants import EnumItemType
 from map_structs import CHeaderV4, CItemGroup, CItemHeader, CItemImage, CItemInfo, CItemLayer, CItemTileLayer, CItemType, CItemVersion, CVersionHeader
@@ -101,7 +98,7 @@ class DataFileWriter:
 
     def _construct_item_tile_layer(self, item: TileLayer[TileManager]) -> list[c_struct]:
         c_item_header = CItemLayer()
-        c_item_header._version = c_int32(-1)
+        c_item_header.version = c_int32(-1)
         c_item_header.type = c_int32(2)
         c_item_header.flags = c_int32(item.detail)
 
@@ -113,7 +110,7 @@ class DataFileWriter:
         c_item_body.color_envelope_offset = c_int32(item.color_envelope_offset)
 
         # TODO: is this actually correct to create a new layer for every ddnet layer?
-        stored_data_ptr = c_int32(self._register_data(item._tiles.raw_data))
+        stored_data_ptr = c_int32(self._register_data(item.tiles.raw_data))
 
         c_item_body.flags = c_int32(0)
         c_item_body.data_ptr = stored_data_ptr
@@ -148,12 +145,12 @@ class DataFileWriter:
         if item.color_envelope is None:
             c_item_body.color_envelope_ref = c_int32(-1)
         else:
-            c_item_body.color_envelope_ref = c_int32(item.color_envelope._item_id)
+            c_item_body.color_envelope_ref = c_int32(item.color_envelope.item_id)
 
         if item.image is None:
             c_item_body.image_ref = c_int32(-1)
         else:
-            c_item_body.image_ref = c_int32(item.image._item_id)
+            c_item_body.image_ref = c_int32(item.image.item_id)
 
         c_item_body.name = c_intstr3(item.name)
 
@@ -178,7 +175,7 @@ class DataFileWriter:
             # raise NotImplementedError('group without layers cannot be handled yet')
             return
 
-        c_item.start_layer = c_int32(item.layers[0]._item_id)
+        c_item.start_layer = c_int32(item.layers[0].item_id)
         c_item.num_layers = c_int32(len(item.layers))
 
         c_item.clipping = c_int32(item.clipping)

@@ -2,80 +2,15 @@ from constants import EnumTileFlag, EnumTileType
 from typing import Optional
 
 
-# TODO: these are unneccessary
-class Tile:
-    def __init__(self, data: Optional[memoryview]):
-        self._data = data
-
-    def _set_byte(self, num_byte: int, value: int):
-        # TODO: check inputs
-        if self._data is not None:
-            self._data[num_byte] = value
-
-
-class VanillaTile(Tile):
-    def __init__(self,
-                 type: int,
-                 v_flip: bool = False,
-                 h_flip: bool = False,
-                 opaque: bool = False,
-                 rotate: bool = False,
-                 data: Optional[memoryview] = None):
-        super().__init__(data)
-
-        self._type = type
-        self._v_flip = v_flip
-        self._h_flip = h_flip
-        self._opaque = opaque
-        self._rotate = rotate
-
-    @property
-    def type(self):
-        return self._type
-
-    @type.setter
-    def type(self, type: int | EnumTileType):
-        self._set_byte(0, type)
-        self._type = type
-
-    @staticmethod
-    def from_data(data: memoryview):
-        assert len(data) == 4
-        return VanillaTile(
-            data[0],
-            EnumTileFlag.VFLIP & data[1] > 0,
-            EnumTileFlag.HFLIP & data[1] > 0,
-            EnumTileFlag.OPAQUE & data[1] > 0,
-            EnumTileFlag.ROTATE & data[1] > 0,
-            data
-        )
-
-
-class TeleTile(Tile):
-    pass
-
-
-class SpeedupTile(Tile):
-    pass
-
-
-class SwitchTile(Tile):
-    pass
-
-
-class TuneTile(Tile):
-    pass
-
-
 class TileManager:
     _tile_bytes: int
 
     def __init__(self, width: int, height: int, data: Optional[bytes] = None):
         needed_bytes = width * height * self._tile_bytes
         if data is None:
-            self._data = memoryview(bytearray(needed_bytes))
+            self._data = bytearray(needed_bytes)
         else:
-            self._data = memoryview(bytearray(data))
+            self._data = bytearray(data)
         assert len(self._data) == needed_bytes
         self._width = width
         self._height = height
@@ -84,18 +19,25 @@ class TileManager:
         assert 0 <= x <= self._width
         assert 0 <= y <= self._height
 
-    def _get_data(self, x: int, y: int):
-        self._check_coords(x, y)
-        begin = (x + y * self._width) * self._tile_bytes
-        return self._data[begin:begin+self._tile_bytes]
-
-    def _get_tilebyte(self, x: int, y: int, num_byte: int):
+    def _set_field(self, x: int, y: int, num_byte: int, value: int):
         self._check_coords(x, y)
         assert 0 <= num_byte < self._tile_bytes
+        assert 0 <= value < 256
+
+        begin = (x + y * self._width) * self._tile_bytes
+        self._data[begin+num_byte] = value
+
+    def _get_field(self, x: int, y: int, num_byte: int):
+        self._check_coords(x, y)
+        assert 0 <= num_byte < self._tile_bytes
+
         begin = (x + y * self._width) * self._tile_bytes
         return self._data[begin+num_byte]
 
     def get_id(self, x: int, y: int) -> int:
+        raise NotImplementedError()
+
+    def set_id(self, x: int, y: int, value: int) -> None:
         raise NotImplementedError()
 
     @property
@@ -114,40 +56,39 @@ class TileManager:
 class VanillaTileManager(TileManager):
     _tile_bytes = 4
 
-    def get_tile(self, x: int, y: int) -> VanillaTile:
-        self._check_coords(x, y)
-        return VanillaTile.from_data(self._get_data(x, y))
+    def get_id(self, x: int, y: int):
+        return self._get_field(x, y, 0)
 
-    def get_id(self, x: int, y: int) -> int:
-        return self._get_tilebyte(x, y, 0)
+    def set_id(self, x: int, y: int, value: int | EnumTileType):
+        return self._set_field(x, y, 0, value)
 
-    def get_flags_int(self, x: int, y: int) -> int:
-        return self._get_tilebyte(x, y, 1)
+    def has_flag(self, x: int, y: int, f: EnumTileFlag):
+        return f & self._get_field(x, y, 1) > 0
 
 
 class TeleTileManager(TileManager):
     _tile_bytes = 2
 
     def get_id(self, x: int, y: int) -> int:
-        return self._get_tilebyte(x, y, 1)
+        return self._get_field(x, y, 1)
 
 
 class SpeedupTileManager(TileManager):
     _tile_bytes = 6
 
     def get_id(self, x: int, y: int) -> int:
-        return self._get_tilebyte(x, y, 1)
+        return self._get_field(x, y, 1)
 
 
 class SwitchTileManager(TileManager):
     _tile_bytes = 4
 
     def get_id(self, x: int, y: int) -> int:
-        return self._get_tilebyte(x, y, 1)
+        return self._get_field(x, y, 1)
 
 
 class TuneTileManager(TileManager):
     _tile_bytes = 2
 
     def get_id(self, x: int, y: int) -> int:
-        return self._get_tilebyte(x, y, 1)
+        return self._get_field(x, y, 1)

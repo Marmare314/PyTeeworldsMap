@@ -1,8 +1,6 @@
-# pyright: reportPrivateUsage=false
-
 from datafile_reader import DataFileReader
 from datafile_writer import DataFileWriter
-from items import ItemManager, VanillaTileLayer
+from items import ItemManager
 
 
 # TODO: make exceptions/asserts consistent
@@ -48,6 +46,10 @@ class TWMap:
         return data.write(path)
 
     @property
+    def manager(self):
+        return self._item_manager
+
+    @property
     def info(self):
         return self._item_manager.info
 
@@ -66,10 +68,6 @@ class TWMap:
     @property
     def game_layer(self):
         return self._item_manager.game_layer
-
-    @game_layer.setter
-    def game_layer(self, layer: VanillaTileLayer):
-        pass
 
 
 if __name__ == '__main__':

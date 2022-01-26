@@ -1,7 +1,7 @@
 from stringfile import StringFile
 from structs import c_int32
 from map_structs import CItemEnvelope, CItemGroup, CItemLayer, CItemQuadLayer, CItemSound, CItemSoundLayer, CItemTileLayer, CVersionHeader, CHeaderV4, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage, c_struct
-from items import ItemEnvelope, ItemGroup, ItemImage, ItemImageExternal, ItemImageInternal, ItemLayer, ItemManager, ItemVersion, ItemInfo, SpeedupTileLayer, SwitchTileLayer, TeleTileLayer, TuneTileLayer, VanillaTileLayer
+from items import ItemEnvelope, ItemGroup, ItemImage, ItemImageExternal, ItemImageInternal, ItemLayer, ItemManager, ItemVersion, ItemInfo, TileLayer
 from constants import EnumItemType, EnumLayerFlags, EnumLayerType, EnumTileLayerFlags
 import zlib
 from PIL import Image
@@ -194,25 +194,20 @@ class DataFileReader:
         is_switch = EnumTileLayerFlags.SWITCH & flags > 0
         is_tune = EnumTileLayerFlags.TUNE & flags > 0
 
-        layer_type = VanillaTileLayer
         manager_type = VanillaTileManager
         data_ptr = item.data_ptr.value
         if is_tele:
-            layer_type = TeleTileLayer
             manager_type = TeleTileManager
             data_ptr = item.data_tele_ptr.value
         elif is_speedup:
-            layer_type = SpeedupTileLayer
             manager_type = SpeedupTileManager
             data_ptr = item.data_speedup_ptr.value
         elif is_front:
             data_ptr = item.data_front_ptr.value
         elif is_switch:
-            layer_type = SwitchTileLayer
             manager_type = SwitchTileManager
             data_ptr = item.data_switch_ptr.value
         elif is_tune:
-            layer_type = TuneTileLayer
             manager_type = TuneTileManager
             data_ptr = item.data_tune_ptr.value
 
@@ -224,9 +219,9 @@ class DataFileReader:
         height = item.height.value
         tile_manager = manager_type(width, height, data=self._get_data(data_ptr))
 
-        layer_type(
+        TileLayer(
             manager=self._item_manager,
-            tiles=tile_manager,  # type: ignore
+            tiles=tile_manager,
             color_envelope_ref=env_ref,
             image_ref=image_ref,
             color_envelope_offset=item.color_envelope_offset.value,

@@ -99,7 +99,7 @@ class CItemGroup(c_struct):
 
 
 class CItemLayer(c_struct):
-    _version: c_int32
+    version: c_int32
     type: c_int32
     flags: c_int32
 

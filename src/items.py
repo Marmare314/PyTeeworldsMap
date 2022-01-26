@@ -1,11 +1,9 @@
-# pyright: reportPrivateUsage=false
-
 from PIL import Image
 from typing import Callable, Generic, Optional, Type, TypeVar
 from itertools import count, filterfalse
 
 from structs import c_intstr3, c_int32
-from tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileManager, TileManager, TuneTileManager, VanillaTileManager
+from tilemanager import TileManager, VanillaTileManager
 from constants import EnumTileLayerFlags
 
 
@@ -20,11 +18,12 @@ class ItemManager:
     def __init__(self):
         self._item_set: set[Item] = set()
 
-        ItemVersion(manager=self, version=3)
+        ItemVersion(manager=self, version=1)
         ItemInfo(manager=self)
-        game_layer = VanillaTileLayer(
+        game_layer = TileLayer(
             manager=self,
             tiles=VanillaTileManager(100, 100),
+            is_game=True,
             name='Game'
         )
         ItemGroup(
@@ -35,7 +34,7 @@ class ItemManager:
 
     def find_item(self, item_type: 'Type[TITEM]', id: int) -> Optional[TITEM]:
         for item in self._item_set:
-            if item._item_id == id and isinstance(item, item_type):
+            if item.item_id == id and isinstance(item, item_type):
                 return item
 
     def map(self, item_type: Type[TITEM], f: Callable[[TITEM], None]):
@@ -47,7 +46,7 @@ class ItemManager:
         ids: set[int] = set()
         for item in self._item_set:
             if type(item) == item_type:
-                ids.add(item._item_id)
+                ids.add(item.item_id)
         return ids
 
     def _next_free_id(self, item_type: 'Type[Item]'):
@@ -56,20 +55,20 @@ class ItemManager:
 
     def clean_ids(self):
         for i, image in enumerate(self.images):
-            image._item_id = i
+            image.item_id = i
 
         for i, group in enumerate(self.groups):
-            group._item_id = i
+            group.item_id = i
 
         total_layers = 0
         for group in self.groups:
             for i, layer in enumerate(group.layers):
-                layer._item_id = total_layers + i
+                layer.item_id = total_layers + i
             total_layers += len(group.layers)
 
     # TODO: make sure that only one version item with id=0 is registered (also info)
     def register(self, item: 'Item'):
-        if item._item_manager != self:
+        if item.manager != self:
             raise NotImplementedError()  # TODO: add copy of item
         else:
             generated_id = self._next_free_id(type(item))
@@ -120,12 +119,12 @@ class ItemManager:
                 yield item
 
     @property
-    def game_layer(self) -> 'VanillaTileLayer':
+    def game_layer(self) -> 'TileLayer[VanillaTileManager]':
         for layer in self.layers:
             if layer.is_game:
-                if not isinstance(layer, VanillaTileLayer):
+                if not isinstance(layer, TileLayer):
                     raise RuntimeError('game_layer has unexpected type')
-                return layer
+                return layer  # type: ignore  # TODO: check type arg somehow (get_args?)
         raise RuntimeError('ItemManager should always have a game layer')
 
 
@@ -140,6 +139,32 @@ class Item:
 
     def __lt__(self, other: 'Item'):
         return self._item_id < other._item_id
+
+    @property
+    def manager(self):
+        return self._item_manager
+
+    @property
+    def item_id(self):
+        """ getter for internal id
+
+        Returns:
+            int: _item_id
+        """
+
+        return self._item_id
+
+    @item_id.setter
+    def item_id(self, new_id: int):
+        """ CAUTION: this changes the internal id without any error checking (this should probably not be done)
+
+        setter for internal id
+
+        Args:
+            new_id (int): new internal id
+        """
+
+        self._item_id = new_id
 
 
 class ItemVersion(Item):
@@ -270,7 +295,7 @@ class TileLayer(ItemLayer, Generic[TMANAGER]):
                  color_envelope_ref: Optional[ItemEnvelope] = None,
                  image_ref: Optional[ItemImage] = None,
                  color_envelope_offset: int = 0,
-                 color: ColorTuple = (0, 0, 0, 0),
+                 color: ColorTuple = (255, 255, 255, 255),
                  detail: bool = False,
                  is_game: bool = False,
                  is_tele: bool = False,
@@ -439,26 +464,6 @@ class TileLayer(ItemLayer, Generic[TMANAGER]):
             return f'<tile_layer: [{self._item_id}]>'
 
 
-class VanillaTileLayer(TileLayer[VanillaTileManager]):
-    pass
-
-
-class TeleTileLayer(TileLayer[TeleTileManager]):
-    pass
-
-
-class SpeedupTileLayer(TileLayer[SpeedupTileManager]):
-    pass
-
-
-class SwitchTileLayer(TileLayer[SwitchTileManager]):
-    pass
-
-
-class TuneTileLayer(TileLayer[TuneTileManager]):
-    pass
-
-
 class QuadLayer(ItemLayer):
     pass
 
@@ -499,6 +504,11 @@ class ItemGroup(Item):
     @property
     def layers(self):
         return list(sorted(self._layers))
+
+    def add_layer(self, item: ItemLayer):
+        if item:
+            self._item_manager.validate(item)
+        self._layers.append(item)
 
     @property
     def x_offset(self):
