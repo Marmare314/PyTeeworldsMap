@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pytwmap.constants import EnumTileFlag, EnumTileType
+from pytwmap.constants import TileFlag
 
 
 class TileManager:
@@ -60,10 +60,10 @@ class VanillaTileManager(TileManager):
     def get_id(self, x: int, y: int):
         return self._get_field(x, y, 0)
 
-    def set_id(self, x: int, y: int, value: int | EnumTileType):
+    def set_id(self, x: int, y: int, value: int):
         return self._set_field(x, y, 0, value)
 
-    def has_flag(self, x: int, y: int, f: EnumTileFlag):
+    def has_flag(self, x: int, y: int, f: TileFlag):
         return f & self._get_field(x, y, 1) > 0
 
 

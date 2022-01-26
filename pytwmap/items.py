@@ -5,7 +5,7 @@ import os
 
 from pytwmap.structs import c_intstr3, c_int32
 from pytwmap.tilemanager import TileManager, VanillaTileManager
-from pytwmap.constants import EnumTileLayerFlags
+from pytwmap.constants import TileLayerFlags
 
 
 TITEM = TypeVar('TITEM', bound='Item')
@@ -21,7 +21,7 @@ class ItemManager:
 
         ItemVersion(manager=self, version=1)
         ItemInfo(manager=self)
-        game_layer = TileLayer(
+        game_layer = ItemTileLayer(
             manager=self,
             tiles=VanillaTileManager(50, 50),
             is_game=True,
@@ -120,10 +120,10 @@ class ItemManager:
                 yield item
 
     @property
-    def game_layer(self) -> 'TileLayer[VanillaTileManager]':
+    def game_layer(self) -> 'ItemTileLayer[VanillaTileManager]':
         for layer in self.layers:
             if layer.is_game:
-                if not isinstance(layer, TileLayer):
+                if not isinstance(layer, ItemTileLayer):
                     raise RuntimeError('game_layer has unexpected type')
                 return layer  # type: ignore  # TODO: check type arg somehow (get_args?)
         raise RuntimeError('ItemManager should always have a game layer')
@@ -301,7 +301,7 @@ class ItemLayer(Item):
         self._name = value
 
 
-class TileLayer(ItemLayer, Generic[TMANAGER]):
+class ItemTileLayer(ItemLayer, Generic[TMANAGER]):
     def __init__(self,
                  manager: ItemManager,
                  tiles: TMANAGER,
@@ -374,93 +374,93 @@ class TileLayer(ItemLayer, Generic[TMANAGER]):
     def height(self):
         return self._tiles.height
 
-    def _get_flag(self, flag: EnumTileLayerFlags):
-        if flag == EnumTileLayerFlags.GAME:
+    def _get_flag(self, flag: TileLayerFlags):
+        if flag == TileLayerFlags.GAME:
             return self._is_game
-        elif flag == EnumTileLayerFlags.TELE:
+        elif flag == TileLayerFlags.TELE:
             return self._is_tele
-        elif flag == EnumTileLayerFlags.SPEEDUP:
+        elif flag == TileLayerFlags.SPEEDUP:
             return self._is_speedup
-        elif flag == EnumTileLayerFlags.FRONT:
+        elif flag == TileLayerFlags.FRONT:
             return self._is_front
-        elif flag == EnumTileLayerFlags.SWITCH:
+        elif flag == TileLayerFlags.SWITCH:
             return self._is_switch
-        elif flag == EnumTileLayerFlags.TUNE:
+        elif flag == TileLayerFlags.TUNE:
             return self._is_tune
 
-    def _set_flag(self, flag: EnumTileLayerFlags, value: bool):
-        if flag == EnumTileLayerFlags.GAME:
+    def _set_flag(self, flag: TileLayerFlags, value: bool):
+        if flag == TileLayerFlags.GAME:
             self._is_game = value
-        elif flag == EnumTileLayerFlags.TELE:
+        elif flag == TileLayerFlags.TELE:
             self._is_tele = value
-        elif flag == EnumTileLayerFlags.SPEEDUP:
+        elif flag == TileLayerFlags.SPEEDUP:
             self._is_speedup = value
-        elif flag == EnumTileLayerFlags.FRONT:
+        elif flag == TileLayerFlags.FRONT:
             self._is_front = value
-        elif flag == EnumTileLayerFlags.SWITCH:
+        elif flag == TileLayerFlags.SWITCH:
             self._is_switch = value
-        elif flag == EnumTileLayerFlags.TUNE:
+        elif flag == TileLayerFlags.TUNE:
             self._is_tune = value
 
     def _reset_all_flags(self):
-        for flag in EnumTileLayerFlags:
+        for flag in TileLayerFlags:
             self._set_flag(flag, False)
 
-    def _flag_setter(self, flag: EnumTileLayerFlags, value: bool):
+    def _flag_setter(self, flag: TileLayerFlags, value: bool):
         if value:
             self._reset_all_flags()
             self._item_manager.map(TileLayer, lambda s: TileLayer._set_flag(s, flag, False))  # type: ignore
-        elif flag == EnumTileLayerFlags.GAME and self._get_flag(flag):
+        elif flag == TileLayerFlags.GAME and self._get_flag(flag):
             raise RuntimeError('the game flag will be automatically removed if it is set on another layer')
         self._set_flag(flag, value)
 
     @property
     def is_game(self):
-        return self._get_flag(EnumTileLayerFlags.GAME)
+        return self._get_flag(TileLayerFlags.GAME)
 
     @is_game.setter
     def is_game(self, value: bool):
-        self._flag_setter(EnumTileLayerFlags.GAME, value)
+        self._flag_setter(TileLayerFlags.GAME, value)
 
     @property
     def is_tele(self):
-        return self._get_flag(EnumTileLayerFlags.TELE)
+        return self._get_flag(TileLayerFlags.TELE)
 
     @is_tele.setter
     def is_tele(self, value: bool):
-        self._flag_setter(EnumTileLayerFlags.TELE, value)
+        self._flag_setter(TileLayerFlags.TELE, value)
 
     @property
     def is_speedup(self):
-        return self._get_flag(EnumTileLayerFlags.SPEEDUP)
+        return self._get_flag(TileLayerFlags.SPEEDUP)
 
     @is_speedup.setter
     def is_speedup(self, value: bool):
-        self._flag_setter(EnumTileLayerFlags.SPEEDUP, value)
+        self._flag_setter(TileLayerFlags.SPEEDUP, value)
 
     @property
     def is_front(self):
-        return self._get_flag(EnumTileLayerFlags.FRONT)
+        return self._get_flag(TileLayerFlags.FRONT)
 
     @is_front.setter
     def is_front(self, value: bool):
-        self._flag_setter(EnumTileLayerFlags.FRONT, value)
+        self._flag_setter(TileLayerFlags.FRONT, value)
 
     @property
     def is_switch(self):
-        return self._get_flag(EnumTileLayerFlags.SWITCH)
+        return self._get_flag(TileLayerFlags.SWITCH)
 
     @is_switch.setter
     def is_switch(self, value: bool):
-        self._flag_setter(EnumTileLayerFlags.SWITCH, value)
+        self._flag_setter(TileLayerFlags.SWITCH, value)
 
     @property
     def is_tune(self):
-        return self._get_flag(EnumTileLayerFlags.TUNE)
+        return self._get_flag(TileLayerFlags.TUNE)
 
     @is_tune.setter
     def is_tune(self, value: bool):
-        self._flag_setter(EnumTileLayerFlags.TUNE, value)
+        self._flag_setter(TileLayerFlags.TUNE, value)
 
     @property
     def tiles(self):
@@ -477,11 +477,11 @@ class TileLayer(ItemLayer, Generic[TMANAGER]):
             return f'<tile_layer: [{self._item_id}]>'
 
 
-class QuadLayer(ItemLayer):
+class ItemQuadLayer(ItemLayer):
     pass
 
 
-class SoundLayer(ItemLayer):
+class ItemSoundLayer(ItemLayer):
     pass
 
 

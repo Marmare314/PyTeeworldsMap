@@ -1,11 +1,11 @@
 import zlib
 from collections import defaultdict
 
-from pytwmap.constants import EnumItemType
+from pytwmap.constants import ItemType
 from pytwmap.map_structs import CHeaderV4, CItemGroup, CItemHeader, CItemImage, CItemInfo, CItemLayer, CItemTileLayer, CItemType, CItemVersion, CVersionHeader
 from pytwmap.stringfile import StringFile
 from pytwmap.structs import c_i32_color, c_intstr3, c_rawstr4, c_int32, c_struct
-from pytwmap.items import Item, ItemGroup, ItemImage, ItemInfo, ItemLayer, ItemVersion, QuadLayer, SoundLayer, TileLayer
+from pytwmap.items import Item, ItemGroup, ItemImage, ItemInfo, ItemLayer, ItemVersion, ItemQuadLayer, ItemSoundLayer, ItemTileLayer
 from pytwmap.tilemanager import TileManager
 
 
@@ -38,8 +38,8 @@ class DataFileWriter:
         c_item = CItemVersion()
         c_item.version = c_int32(item.version)
 
-        self._item_types[EnumItemType.VERSION] += 1
-        self._items[EnumItemType.VERSION].append([c_item])
+        self._item_types[ItemType.VERSION] += 1
+        self._items[ItemType.VERSION].append([c_item])
 
     def _register_item_info(self, item: ItemInfo):
         author_ptr = -1
@@ -67,8 +67,8 @@ class DataFileWriter:
         c_item.license_ptr = c_int32(license_ptr)
         c_item.settings_ptr = c_int32(settings_ptr)
 
-        self._item_types[EnumItemType.INFO] += 1
-        self._items[EnumItemType.INFO].append([c_item])
+        self._item_types[ItemType.INFO] += 1
+        self._items[ItemType.INFO].append([c_item])
 
     def _register_item_image(self, item: ItemImage):
         name_ptr = self._register_data_str(item.name)
@@ -84,19 +84,19 @@ class DataFileWriter:
         c_item.name_ptr = c_int32(name_ptr)
         c_item.data_ptr = c_int32(data_ptr)
 
-        self._item_types[EnumItemType.IMAGE] += 1
-        self._items[EnumItemType.IMAGE].append([c_item])
+        self._item_types[ItemType.IMAGE] += 1
+        self._items[ItemType.IMAGE].append([c_item])
 
     def _register_item_layer(self, item: ItemLayer):
-        if isinstance(item, TileLayer):
+        if isinstance(item, ItemTileLayer):
             c_items = self._construct_item_tile_layer(item)  # type: ignore
         else:
             raise NotImplementedError()
 
-        self._item_types[EnumItemType.LAYER] += 1
-        self._items[EnumItemType.LAYER].append(c_items)
+        self._item_types[ItemType.LAYER] += 1
+        self._items[ItemType.LAYER].append(c_items)
 
-    def _construct_item_tile_layer(self, item: TileLayer[TileManager]) -> list[c_struct]:
+    def _construct_item_tile_layer(self, item: ItemTileLayer[TileManager]) -> list[c_struct]:
         c_item_header = CItemLayer()
         c_item_header.version = c_int32(-1)
         c_item_header.type = c_int32(2)
@@ -156,10 +156,10 @@ class DataFileWriter:
 
         return [c_item_header, c_item_body]
 
-    def _construct_item_quad_layer(self, item: QuadLayer):
+    def _construct_item_quad_layer(self, item: ItemQuadLayer):
         pass
 
-    def _construct_item_sound_layer(self, item: SoundLayer):
+    def _construct_item_sound_layer(self, item: ItemSoundLayer):
         pass
 
     def _register_item_group(self, item: ItemGroup):
@@ -186,8 +186,8 @@ class DataFileWriter:
 
         c_item.name = c_intstr3(item.name)
 
-        self._item_types[EnumItemType.GROUP] += 1
-        self._items[EnumItemType.GROUP].append([c_item])
+        self._item_types[ItemType.GROUP] += 1
+        self._items[ItemType.GROUP].append([c_item])
 
     def _register_data_str_list(self, data: list[str]):
         byte_data = b''

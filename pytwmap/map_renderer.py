@@ -1,7 +1,7 @@
 from PIL import Image
 
-from pytwmap.constants import EnumTileFlag
-from pytwmap.items import ItemImage, ItemImageExternal, ItemLayer, ItemManager, QuadLayer, TileLayer
+from pytwmap.constants import TileFlag
+from pytwmap.items import ItemImage, ItemImageExternal, ItemLayer, ItemManager, ItemQuadLayer, ItemTileLayer
 from pytwmap.tilemanager import TileManager, VanillaTileManager
 from pytwmap.twmap import TWMap
 
@@ -42,7 +42,7 @@ class MapRenderer:
     def generate_tilesets(self):
         self._tilesets = {}
         for layer in self._map_ref.layers:
-            if isinstance(layer, TileLayer):
+            if isinstance(layer, ItemTileLayer):
                 if layer.image is not None:
                     self._add_tileset(layer.image)
         self._add_tileset(self._entities)
@@ -52,14 +52,14 @@ class MapRenderer:
         return Image.frombytes('RGBA', (w * tile_scale, h * tile_scale), pygame.image.tostring(self.render_layer(layer, slice, tile_scale), 'RGBA'))  # type: ignore
 
     def _render_layer(self, layer: ItemLayer, slice: map_slice, tile_scale: int):
-        if isinstance(layer, TileLayer):
+        if isinstance(layer, ItemTileLayer):
             return self._render_tile_layer(layer, slice, tile_scale)  # type: ignore
-        elif isinstance(layer, QuadLayer):
+        elif isinstance(layer, ItemQuadLayer):
             raise NotImplementedError()
         else:
             raise RuntimeError('cannot render layer')
 
-    def _render_tile_layer(self, layer: TileLayer[TileManager], slice: map_slice, tile_scale: int):
+    def _render_tile_layer(self, layer: ItemTileLayer[TileManager], slice: map_slice, tile_scale: int):
         x_0, y_0, w, h = slice
 
         if layer.is_game or layer.is_front or layer.is_tele or layer.is_switch or layer.is_tune or layer.is_speedup:
@@ -82,11 +82,11 @@ class MapRenderer:
                 t = layer.tiles.get_id(x_0 + dx, y_0 + dy)
                 tile_img = tileset[t]
                 if isinstance(layer.tiles, VanillaTileManager):
-                    if layer.tiles.has_flag(x_0 + dx, y_0 + dy, EnumTileFlag.VFLIP):
+                    if layer.tiles.has_flag(x_0 + dx, y_0 + dy, TileFlag.VFLIP):
                         tile_img = pygame.transform.flip(tile_img, True, False)
-                    if layer.tiles.has_flag(x_0 + dx, y_0 + dy, EnumTileFlag.HFLIP):
+                    if layer.tiles.has_flag(x_0 + dx, y_0 + dy, TileFlag.HFLIP):
                         tile_img = pygame.transform.flip(tile_img, False, True)
-                    if layer.tiles.has_flag(x_0 + dx, y_0 + dy, EnumTileFlag.ROTATE):
+                    if layer.tiles.has_flag(x_0 + dx, y_0 + dy, TileFlag.ROTATE):
                         tile_img = pygame.transform.rotate(tile_img, -90)
                 tile_img = pygame.transform.scale(tile_img, (tile_scale, tile_scale))
                 buffer.blit(tile_img, (dx * tile_scale, dy * tile_scale))

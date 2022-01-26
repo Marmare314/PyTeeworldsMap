@@ -5,8 +5,8 @@ from typing import Optional, Type, TypeVar
 from pytwmap.stringfile import StringFile
 from pytwmap.structs import c_int32
 from pytwmap.map_structs import CItemEnvelope, CItemGroup, CItemLayer, CItemQuadLayer, CItemSound, CItemSoundLayer, CItemTileLayer, CVersionHeader, CHeaderV4, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage, c_struct
-from pytwmap.items import ItemEnvelope, ItemGroup, ItemImage, ItemImageExternal, ItemImageInternal, ItemLayer, ItemManager, ItemVersion, ItemInfo, TileLayer
-from pytwmap.constants import EnumItemType, EnumLayerFlags, EnumLayerType, EnumTileLayerFlags
+from pytwmap.items import ItemEnvelope, ItemGroup, ItemImage, ItemImageExternal, ItemImageInternal, ItemLayer, ItemManager, ItemVersion, ItemInfo, ItemTileLayer
+from pytwmap.constants import ItemType, LayerFlags, LayerType, TileLayerFlags
 from pytwmap.tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileManager, TuneTileManager, VanillaTileManager
 
 
@@ -64,19 +64,19 @@ class DataFileReader:
 
     def _get_typeid(self, item_type: 'Type[c_struct]'):
         if item_type == CItemVersion:
-            return EnumItemType.VERSION
+            return ItemType.VERSION
         elif item_type == CItemInfo:
-            return EnumItemType.INFO
+            return ItemType.INFO
         elif item_type == CItemImage:
-            return EnumItemType.IMAGE
+            return ItemType.IMAGE
         elif item_type == CItemEnvelope:
-            return EnumItemType.ENVELOPE
+            return ItemType.ENVELOPE
         elif item_type == CItemGroup:
-            return EnumItemType.GROUP
+            return ItemType.GROUP
         elif item_type in [CItemLayer, CItemTileLayer, CItemQuadLayer, CItemSoundLayer]:
-            return EnumItemType.LAYER
+            return ItemType.LAYER
         elif item_type == CItemSound:
-            return EnumItemType.SOUND
+            return ItemType.SOUND
 
     def _get_type_start(self, item_type: 'Type[c_struct]'):
         for c_item in self._item_types:
@@ -188,12 +188,12 @@ class DataFileReader:
             raise RuntimeError('unexpected tilelayer version')
 
         flags = item.flags.value
-        is_game = EnumTileLayerFlags.GAME & flags > 0
-        is_tele = EnumTileLayerFlags.TELE & flags > 0
-        is_speedup = EnumTileLayerFlags.SPEEDUP & flags > 0
-        is_front = EnumTileLayerFlags.FRONT & flags > 0
-        is_switch = EnumTileLayerFlags.SWITCH & flags > 0
-        is_tune = EnumTileLayerFlags.TUNE & flags > 0
+        is_game = TileLayerFlags.GAME & flags > 0
+        is_tele = TileLayerFlags.TELE & flags > 0
+        is_speedup = TileLayerFlags.SPEEDUP & flags > 0
+        is_front = TileLayerFlags.FRONT & flags > 0
+        is_switch = TileLayerFlags.SWITCH & flags > 0
+        is_tune = TileLayerFlags.TUNE & flags > 0
 
         manager_type = VanillaTileManager
         data_ptr = item.data_ptr.value
@@ -220,7 +220,7 @@ class DataFileReader:
         height = item.height.value
         tile_manager = manager_type(width, height, data=self._get_data(data_ptr))
 
-        TileLayer(
+        ItemTileLayer(
             manager=self._item_manager,
             tiles=tile_manager,
             color_envelope_ref=env_ref,
@@ -252,11 +252,11 @@ class DataFileReader:
         for i in range(self._get_num_items(CItemLayer)):
             item = self._get_item(CItemLayer, i)
 
-            detail = EnumLayerFlags.DETAIL & item.flags.value > 0
+            detail = LayerFlags.DETAIL & item.flags.value > 0
 
-            if item.type.value in [EnumLayerType.SOUNDS, EnumLayerType.SOUNDS_DEPCRECATED]:
+            if item.type.value in [LayerType.SOUNDS, LayerType.SOUNDS_DEPCRECATED]:
                 self._add_sound_layer(i, detail)
-            elif item.type.value == EnumLayerType.QUADS:
+            elif item.type.value == LayerType.QUADS:
                 self._add_quad_layer(i, detail)
             else:
                 self._add_tile_layer(i, detail)
