@@ -23,7 +23,8 @@ class c_type:
     def from_data(cls, data: StringFile) -> 'c_type':
         raise NotImplementedError()
 
-    def to_bytes(self) -> bytes:
+    # TODO: make this take stringfile too?
+    def to_data(self) -> bytes:
         raise NotImplementedError()
 
     @classmethod
@@ -31,21 +32,9 @@ class c_type:
         raise NotImplementedError()
 
 
-class c_int_impl(c_type):
+class c_int_impl(c_type, int):
     _num_bytes: int
     _signed: bool
-
-    def __init__(self, value: int):
-        self.value = value
-
-    @property
-    def value(self):
-        return self._value
-
-    @value.setter
-    def value(self, value: int):
-        assert self.fits_value(value)
-        self._value = value
 
     @classmethod
     def fits_value(cls, value: int):
@@ -59,8 +48,8 @@ class c_int_impl(c_type):
     def from_data(cls, data: StringFile) -> 'c_int_impl':
         return cls(int.from_bytes(data.read(cls._num_bytes), byteorder='little', signed=cls._signed))
 
-    def to_bytes(self):
-        return self._value.to_bytes(self._num_bytes, byteorder='little', signed=self._signed)
+    def to_data(self):
+        return self.to_bytes(self._num_bytes, byteorder='little', signed=self._signed)
 
     @classmethod
     def size_bytes(cls) -> int:
@@ -72,21 +61,8 @@ class c_int32(c_int_impl):
     _signed = True
 
 
-class c_str_impl(c_type):
+class c_str_impl(c_type, str):
     _length: int
-
-    def __init__(self, value: str):
-        self.value = value
-
-    @property
-    def value(self):
-        return self._value
-
-    @value.setter
-    def value(self, value: str):
-        assert self.fits_str(value)
-
-        self._value = value
 
     @classmethod
     def fits_str(cls, value: str):
@@ -104,8 +80,8 @@ class c_str_impl(c_type):
     def from_data(cls, data: StringFile) -> 'c_str_impl':
         return cls(cls._decode(data.read(cls._length)))
 
-    def to_bytes(self):
-        return self._encode(self._value)
+    def to_data(self):
+        return self._encode(self)
 
     @classmethod
     def size_bytes(cls) -> int:
@@ -145,11 +121,11 @@ class c_intstr_impl(c_str_impl):
 
 
 class c_intstr3(c_intstr_impl):
-    _length = 3 * 4  # 3 * c_int32
+    _length = 3 * c_int32.size_bytes()
 
 
 class c_intstr8(c_intstr_impl):
-    _length = 8 * 4
+    _length = 8 * c_int32.size_bytes()
 
 
 T = TypeVar('T')
@@ -165,10 +141,10 @@ class c_struct:
 
         return instance
 
-    def to_bytes(self):
+    def to_data(self):
         ret = b''
         for var_name in self.__annotations__:
-            ret += getattr(self, var_name).to_bytes()
+            ret += getattr(self, var_name).to_data()
         return ret
 
     @classmethod
@@ -194,6 +170,5 @@ class c_i32_color(c_struct):
         col.a = c_int32(a)
         return col
 
-    @property
-    def value(self):
-        return self.r.value, self.g.value, self.b.value, self.a.value
+    def as_tuple(self):
+        return self.r, self.g, self.b, self.a

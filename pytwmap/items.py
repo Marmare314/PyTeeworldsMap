@@ -409,7 +409,7 @@ class ItemTileLayer(ItemLayer, Generic[TMANAGER]):
     def _flag_setter(self, flag: TileLayerFlags, value: bool):
         if value:
             self._reset_all_flags()
-            self._item_manager.map(TileLayer, lambda s: TileLayer._set_flag(s, flag, False))  # type: ignore
+            self._item_manager.map(ItemTileLayer, lambda s: ItemTileLayer._set_flag(s, flag, False))  # type: ignore
         elif flag == TileLayerFlags.GAME and self._get_flag(flag):
             raise RuntimeError('the game flag will be automatically removed if it is set on another layer')
         self._set_flag(flag, value)

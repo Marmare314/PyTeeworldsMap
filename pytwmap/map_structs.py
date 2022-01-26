@@ -6,7 +6,7 @@ class CVersionHeader(c_struct):
     version: c_int32
 
 
-class CHeaderV4(c_struct):
+class CHeader(c_struct):
     size: c_int32
     swaplen: c_int32
     num_item_types: c_int32

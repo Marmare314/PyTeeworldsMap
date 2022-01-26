@@ -4,7 +4,7 @@ from typing import Optional, Type, TypeVar
 
 from pytwmap.stringfile import StringFile
 from pytwmap.structs import c_int32
-from pytwmap.map_structs import CItemEnvelope, CItemGroup, CItemLayer, CItemQuadLayer, CItemSound, CItemSoundLayer, CItemTileLayer, CVersionHeader, CHeaderV4, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage, c_struct
+from pytwmap.map_structs import CItemEnvelope, CItemGroup, CItemLayer, CItemQuadLayer, CItemSound, CItemSoundLayer, CItemTileLayer, CVersionHeader, CHeader, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage, c_struct
 from pytwmap.items import ItemEnvelope, ItemGroup, ItemImage, ItemImageExternal, ItemImageInternal, ItemLayer, ItemManager, ItemVersion, ItemInfo, ItemTileLayer
 from pytwmap.constants import ItemType, LayerFlags, LayerType, TileLayerFlags
 from pytwmap.tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileManager, TuneTileManager, VanillaTileManager
@@ -19,32 +19,32 @@ class DataFileReader:
         self._item_manager = manager
 
         self._ver_header = CVersionHeader.from_data(self._data)
-        if self._ver_header.magic.value not in ['DATA', 'ATAD']:
+        if self._ver_header.magic not in ['DATA', 'ATAD']:
             raise RuntimeError('wrong magic bytes')
-        if self._ver_header.version.value != 4:
+        if self._ver_header.version != 4:
             raise RuntimeError('only version 4 is supported')
 
-        self._header = CHeaderV4.from_data(self._data)
+        self._header = CHeader.from_data(self._data)
 
-        self._item_types = [CItemType.from_data(self._data) for _ in range(self._header.num_item_types.value)]
+        self._item_types = [CItemType.from_data(self._data) for _ in range(self._header.num_item_types)]
 
-        self._item_offsets = [c_int32.from_data(self._data).value for _ in range(self._header.num_items.value)]
-        self._data_offsets = [c_int32.from_data(self._data).value for _ in range(self._header.num_data.value)]
-        self._data_sizes = [c_int32.from_data(self._data).value for _ in range(self._header.num_data.value)]
+        self._item_offsets = [c_int32.from_data(self._data) for _ in range(self._header.num_items)]
+        self._data_offsets = [c_int32.from_data(self._data) for _ in range(self._header.num_data)]
+        self._data_sizes = [c_int32.from_data(self._data) for _ in range(self._header.num_data)]
 
         self._items_start = self._data.tell()
 
         self._calc_data_start()
 
     def _calc_data_start(self):
-        self._data_start = self._header.num_item_types.value * CItemType.size_bytes()
-        self._data_start += (self._header.num_items.value + 2 * self._header.num_data.value) * c_int32.size_bytes()
-        self._data_start += self._header.item_size.value
-        self._data_start += CVersionHeader.size_bytes() + CHeaderV4.size_bytes()
+        self._data_start = self._header.num_item_types * CItemType.size_bytes()
+        self._data_start += (self._header.num_items + 2 * self._header.num_data) * c_int32.size_bytes()
+        self._data_start += self._header.item_size
+        self._data_start += CVersionHeader.size_bytes() + CHeader.size_bytes()
 
     def _get_data(self, data_ptr: int):
         offset_begin = self._data_offsets[data_ptr]
-        offset_end = self._header.size.value
+        offset_end = self._header.size
         if data_ptr + 1 < len(self._data_offsets):
             offset_end = self._data_offsets[data_ptr + 1]
         num_bytes = offset_end - offset_begin
@@ -80,13 +80,13 @@ class DataFileReader:
 
     def _get_type_start(self, item_type: 'Type[c_struct]'):
         for c_item in self._item_types:
-            if c_item.type_id.value == self._get_typeid(item_type):
-                return c_item.start.value
+            if c_item.type_id == self._get_typeid(item_type):
+                return c_item.start
 
     def _get_num_items(self, item_type: 'Type[c_struct]'):
         for c_item in self._item_types:
-            if c_item.type_id.value == self._get_typeid(item_type):
-                return c_item.num.value
+            if c_item.type_id == self._get_typeid(item_type):
+                return c_item.num
         return 0
 
     def _validate_item_header(self, index: int, item_type: Type[c_struct]):
@@ -99,11 +99,11 @@ class DataFileReader:
             size += CItemLayer.size_bytes()
 
         header = CItemHeader.from_data(self._data)
-        if (header.type_id_index.value & 0xffff) != index:
+        if (header.type_id_index & 0xffff) != index:
             raise RuntimeError('index of item is not as expected')
-        if (header.type_id_index.value >> 16) & 0xffff != self._get_typeid(item_type):
+        if (header.type_id_index >> 16) & 0xffff != self._get_typeid(item_type):
             raise RuntimeError('type_id of item is not as expected')
-        if header.size.value != size:
+        if header.size != size:
             raise RuntimeError('size of item_data is not as expected')
 
     def _get_item(self, item_type: Type[T], index: int) -> T:
@@ -122,26 +122,26 @@ class DataFileReader:
     def add_version(self):
         item = self._get_item(CItemVersion, 0)
 
-        if item.version.value != 1:
+        if item.version != 1:
             raise RuntimeError('unsupported ItemVersion version')
 
         ItemVersion(
             manager=self._item_manager,
-            version=item.version.value,
+            version=item.version,
             _id=0
         )
 
     def add_info(self):
         item = self._get_item(CItemInfo, 0)
 
-        if item.version.value != 1:
+        if item.version != 1:
             raise RuntimeError('unsupported ItemInfo version')
 
-        author = self._get_data_str(item.author_ptr.value)
-        mapversion = self._get_data_str(item.map_version_ptr.value)
-        credits = self._get_data_str(item.credits_ptr.value)
-        license = self._get_data_str(item.license_ptr.value)
-        settings: list[str] = self._get_data_str_list(item.settings_ptr.value)
+        author = self._get_data_str(item.author_ptr)
+        mapversion = self._get_data_str(item.map_version_ptr)
+        credits = self._get_data_str(item.credits_ptr)
+        license = self._get_data_str(item.license_ptr)
+        settings: list[str] = self._get_data_str_list(item.settings_ptr)
 
         ItemInfo(
             manager=self._item_manager,
@@ -157,12 +157,12 @@ class DataFileReader:
         for i in range(self._get_num_items(CItemImage)):
             item = self._get_item(CItemImage, i)
 
-            if item.version.value != 1:
+            if item.version != 1:
                 raise RuntimeError('unexpected tilelayer version')
 
-            name = self._get_data_str(item.name_ptr.value)
+            name = self._get_data_str(item.name_ptr)
 
-            if item.external.value:
+            if item.external:
                 ItemImageExternal(
                     manager=self._item_manager,
                     name=name,
@@ -171,8 +171,8 @@ class DataFileReader:
             else:
                 loaded_img: Image.Image = Image.frombytes(  # type: ignore
                     'RGBA',
-                    (item.width.value, item.height.value),
-                    self._get_data(item.data_ptr.value)
+                    (item.width, item.height),
+                    self._get_data(item.data_ptr)
                 )
                 ItemImageInternal(
                     manager=self._item_manager,
@@ -184,10 +184,10 @@ class DataFileReader:
     def _add_tile_layer(self, index: int, detail: bool):
         item = self._get_item(CItemTileLayer, index)
 
-        if item.version.value != 3:
+        if item.version != 3:
             raise RuntimeError('unexpected tilelayer version')
 
-        flags = item.flags.value
+        flags = item.flags
         is_game = TileLayerFlags.GAME & flags > 0
         is_tele = TileLayerFlags.TELE & flags > 0
         is_speedup = TileLayerFlags.SPEEDUP & flags > 0
@@ -196,28 +196,28 @@ class DataFileReader:
         is_tune = TileLayerFlags.TUNE & flags > 0
 
         manager_type = VanillaTileManager
-        data_ptr = item.data_ptr.value
+        data_ptr = item.data_ptr
         if is_tele:
             manager_type = TeleTileManager
-            data_ptr = item.data_tele_ptr.value
+            data_ptr = item.data_tele_ptr
         elif is_speedup:
             manager_type = SpeedupTileManager
-            data_ptr = item.data_speedup_ptr.value
+            data_ptr = item.data_speedup_ptr
         elif is_front:
-            data_ptr = item.data_front_ptr.value
+            data_ptr = item.data_front_ptr
         elif is_switch:
             manager_type = SwitchTileManager
-            data_ptr = item.data_switch_ptr.value
+            data_ptr = item.data_switch_ptr
         elif is_tune:
             manager_type = TuneTileManager
-            data_ptr = item.data_tune_ptr.value
+            data_ptr = item.data_tune_ptr
 
-        env_ref: Optional[ItemEnvelope] = self._item_manager.find_item(ItemEnvelope, item.color_envelope_ref.value)
+        env_ref: Optional[ItemEnvelope] = self._item_manager.find_item(ItemEnvelope, item.color_envelope_ref)
 
-        image_ref: Optional[ItemImage] = self._item_manager.find_item(ItemImage, item.image_ref.value)
+        image_ref: Optional[ItemImage] = self._item_manager.find_item(ItemImage, item.image_ref)
 
-        width = item.width.value
-        height = item.height.value
+        width = item.width
+        height = item.height
         tile_manager = manager_type(width, height, data=self._get_data(data_ptr))
 
         ItemTileLayer(
@@ -225,8 +225,8 @@ class DataFileReader:
             tiles=tile_manager,
             color_envelope_ref=env_ref,
             image_ref=image_ref,
-            color_envelope_offset=item.color_envelope_offset.value,
-            color=item.color.value,
+            color_envelope_offset=item.color_envelope_offset,
+            color=item.color.as_tuple(),
             detail=detail,
             is_game=is_game,
             is_tele=is_tele,
@@ -234,7 +234,7 @@ class DataFileReader:
             is_front=is_front,
             is_switch=is_switch,
             is_tune=is_tune,
-            name=item.name.value,
+            name=item.name,
             _id=index
         )
 
@@ -252,11 +252,11 @@ class DataFileReader:
         for i in range(self._get_num_items(CItemLayer)):
             item = self._get_item(CItemLayer, i)
 
-            detail = LayerFlags.DETAIL & item.flags.value > 0
+            detail = LayerFlags.DETAIL & item.flags > 0
 
-            if item.type.value in [LayerType.SOUNDS, LayerType.SOUNDS_DEPCRECATED]:
+            if item.type in [LayerType.SOUNDS, LayerType.SOUNDS_DEPCRECATED]:
                 self._add_sound_layer(i, detail)
-            elif item.type.value == LayerType.QUADS:
+            elif item.type == LayerType.QUADS:
                 self._add_quad_layer(i, detail)
             else:
                 self._add_tile_layer(i, detail)
@@ -265,12 +265,12 @@ class DataFileReader:
         for i in range(self._get_num_items(CItemGroup)):
             item = self._get_item(CItemGroup, i)
 
-            if item.version.value != 3:
+            if item.version != 3:
                 raise RuntimeError('unexpected tilelayer version')
 
             layer_refs: list[ItemLayer] = []
-            for k in range(item.num_layers.value):
-                ref = self._item_manager.find_item(ItemLayer, item.start_layer.value + k)
+            for k in range(item.num_layers):
+                ref = self._item_manager.find_item(ItemLayer, item.start_layer + k)
                 if ref:
                     layer_refs.append(ref)
                 # TODO: enable when all layers have been implemented
@@ -282,15 +282,15 @@ class DataFileReader:
             ItemGroup(
                 manager=self._item_manager,
                 layers=layer_refs,
-                x_offset=item.x_offset.value,
-                y_offset=item.y_offset.value,
-                x_parallax=item.x_parallax.value,
-                y_parallax=item.y_parallax.value,
-                clipping=item.clipping.value > 0,
-                clip_x=item.clip_x.value,
-                clip_y=item.clip_y.value,
-                clip_width=item.clip_width.value,
-                clip_height=item.clip_height.value,
-                name=item.name.value,
+                x_offset=item.x_offset,
+                y_offset=item.y_offset,
+                x_parallax=item.x_parallax,
+                y_parallax=item.y_parallax,
+                clipping=item.clipping > 0,
+                clip_x=item.clip_x,
+                clip_y=item.clip_y,
+                clip_width=item.clip_width,
+                clip_height=item.clip_height,
+                name=item.name,
                 _id=i
             )

@@ -2,7 +2,7 @@ import zlib
 from collections import defaultdict
 
 from pytwmap.constants import ItemType
-from pytwmap.map_structs import CHeaderV4, CItemGroup, CItemHeader, CItemImage, CItemInfo, CItemLayer, CItemTileLayer, CItemType, CItemVersion, CVersionHeader
+from pytwmap.map_structs import CHeader, CItemGroup, CItemHeader, CItemImage, CItemInfo, CItemLayer, CItemTileLayer, CItemType, CItemVersion, CVersionHeader
 from pytwmap.stringfile import StringFile
 from pytwmap.structs import c_i32_color, c_intstr3, c_rawstr4, c_int32, c_struct
 from pytwmap.items import Item, ItemGroup, ItemImage, ItemInfo, ItemLayer, ItemVersion, ItemQuadLayer, ItemSoundLayer, ItemTileLayer
@@ -212,7 +212,7 @@ class DataFileWriter:
         c_item.magic = c_rawstr4('DATA')
         c_item.version = c_int32(4)
 
-        self._data_file.append(c_item.to_bytes())
+        self._data_file.append(c_item.to_data())
 
     def _get_item_size(self):
         item_size = 0
@@ -228,7 +228,7 @@ class DataFileWriter:
         return num_items
 
     def _get_swaplen(self):
-        swaplen = CHeaderV4.size_bytes() - 2 * c_int32.size_bytes()  # remaining header
+        swaplen = CHeader.size_bytes() - 2 * c_int32.size_bytes()  # remaining header
         swaplen += len(self._item_types) * CItemType.size_bytes()
         swaplen += len(self._get_item_offsets()) * c_int32.size_bytes()
         swaplen += 2 * len(self._data_offsets) * c_int32.size_bytes()
@@ -239,7 +239,7 @@ class DataFileWriter:
         return self._get_swaplen() + len(self._data)
 
     def _write_header(self):
-        c_item = CHeaderV4()
+        c_item = CHeader()
         c_item.size = c_int32(self._get_size())
         c_item.swaplen = c_int32(self._get_swaplen())
         c_item.num_item_types = c_int32(len(self._item_types))
@@ -248,7 +248,7 @@ class DataFileWriter:
         c_item.item_size = c_int32(self._get_item_size())
         c_item.data_size = c_int32(len(self._data))
 
-        self._data_file.append(c_item.to_bytes())
+        self._data_file.append(c_item.to_data())
 
     def _write_item_types(self):
         start = 0
@@ -260,7 +260,7 @@ class DataFileWriter:
             c_item.start = c_int32(start)
             c_item.num = c_int32(num)
 
-            self._data_file.append(c_item.to_bytes())
+            self._data_file.append(c_item.to_data())
 
             start += num
 
@@ -275,18 +275,18 @@ class DataFileWriter:
 
     def _write_size_indicators(self):
         for offset in self._get_item_offsets():
-            self._data_file.append(c_int32(offset).to_bytes())
+            self._data_file.append(c_int32(offset).to_data())
 
         for offset in self._data_offsets:
-            self._data_file.append(c_int32(offset).to_bytes())
+            self._data_file.append(c_int32(offset).to_data())
 
         for size in self._data_sizes:
-            self._data_file.append(c_int32(size).to_bytes())
+            self._data_file.append(c_int32(size).to_data())
 
     def _write_items(self):
         for type_id in sorted(self._items):
             for index, item_list in enumerate(self._items[type_id]):
-                item_bytes = b''.join([item.to_bytes() for item in item_list])
+                item_bytes = b''.join([item.to_data() for item in item_list])
 
                 combined = index | (type_id << 16)
 
@@ -294,7 +294,7 @@ class DataFileWriter:
                 c_item.type_id_index = c_int32(combined)
                 c_item.size = c_int32(len(item_bytes))
 
-                self._data_file.append(c_item.to_bytes())
+                self._data_file.append(c_item.to_data())
                 self._data_file.append(item_bytes)
 
     def write(self, path: str):
