@@ -22,7 +22,7 @@ class ItemManager:
         ItemInfo(manager=self)
         game_layer = TileLayer(
             manager=self,
-            tiles=VanillaTileManager(100, 100),
+            tiles=VanillaTileManager(50, 50),
             is_game=True,
             name='Game'
         )
@@ -478,8 +478,8 @@ class ItemGroup(Item):
                  layers: list[ItemLayer],
                  x_offset: int = 0,
                  y_offset: int = 0,
-                 x_parallax: int = 0,
-                 y_parallax: int = 0,
+                 x_parallax: int = 100,
+                 y_parallax: int = 100,
                  clipping: bool = False,
                  clip_x: int = 0,
                  clip_y: int = 0,
