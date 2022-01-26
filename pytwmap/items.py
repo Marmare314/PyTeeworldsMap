@@ -1,6 +1,7 @@
 from PIL import Image
 from typing import Callable, Generic, Optional, Type, TypeVar
 from itertools import count, filterfalse
+import os
 
 from pytwmap.structs import c_intstr3, c_int32
 from pytwmap.tilemanager import TileManager, VanillaTileManager
@@ -207,9 +208,21 @@ class ItemImage(Item):
         self._name = name
         self._external = False
 
+    @staticmethod
+    def _directory_has_image(path: str, name: str):
+        files = [x.removesuffix('.png') for x in os.listdir(path)]
+        return name in files
+
+    @staticmethod
+    def _get_external_path(name: str):  # TODO: if 07 is supported this needs to be changed
+        path_06 = os.path.join(os.path.dirname(__file__), 'mapres_06')
+        if ItemImage._directory_has_image(path_06, name):
+            return os.path.join(os.path.dirname(__file__), f'mapres_06/{name}.png')
+        else:
+            raise RuntimeError('not a valid external image name')
+
     def set_external(self, name: str):
-        # TODO: assert name is in externals
-        self._image = Image.open(f'../mapres/{name}.png')
+        self._image = Image.open(self._get_external_path(name))
         self._name = name
         self._external = True
 

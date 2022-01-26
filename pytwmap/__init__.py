@@ -21,4 +21,4 @@ from pytwmap.items import TileLayer as TileLayer
 from pytwmap.items import ItemGroup as ItemGroup
 # from pytwmap.items import ItemSound as ItemSound
 
-from pytwmap.maprenderer import MapRenderer as MapRenderer
+from pytwmap.map_renderer import MapRenderer as MapRenderer
