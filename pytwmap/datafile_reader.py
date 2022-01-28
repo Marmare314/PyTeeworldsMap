@@ -57,7 +57,7 @@ class DataFileReader:
             return ''
         return self._get_data(data_ptr)[:-1].decode('utf8')
 
-    def _get_data_str_list(self, data_ptr: int) -> list[str]:
+    def _get_data_str_list(self, data_ptr: int) -> 'list[str]':
         if data_ptr < 0:
             return []
         return [s.decode('utf8') for s in self._get_data(data_ptr).split(b'\0')[:-1]]

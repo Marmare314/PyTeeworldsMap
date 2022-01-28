@@ -1,5 +1,5 @@
 from PIL import Image
-from typing import Callable, Generic, Optional, Type, TypeVar
+from typing import Callable, Generic, Optional, Type, TypeVar, Tuple
 from itertools import count, filterfalse
 import os
 
@@ -10,9 +10,6 @@ from pytwmap.constants import TileLayerFlags
 
 TITEM = TypeVar('TITEM', bound='Item')
 TMANAGER = TypeVar('TMANAGER', bound=TileManager)
-
-
-ColorTuple = tuple[int, int, int, int]
 
 
 class ItemManager:
@@ -185,7 +182,7 @@ class ItemInfo(Item):
                  mapversion: str = '',
                  credits: str = '',
                  license: str = '',
-                 settings: list[str] = [],
+                 settings: 'list[str]' = [],
                  _id: Optional[int] = None):
         super().__init__(manager, _id)
 
@@ -210,7 +207,7 @@ class ItemImage(Item):
 
     @staticmethod
     def _directory_has_image(path: str, name: str):
-        files = [x.removesuffix('.png') for x in os.listdir(path)]
+        files = [x.rstrip('.png') for x in os.listdir(path)]
         return name in files
 
     @staticmethod
@@ -308,7 +305,7 @@ class ItemTileLayer(ItemLayer, Generic[TMANAGER]):
                  color_envelope_ref: Optional[ItemEnvelope] = None,
                  image_ref: Optional[ItemImage] = None,
                  color_envelope_offset: int = 0,
-                 color: ColorTuple = (255, 255, 255, 255),
+                 color: 'tuple[int, int, int, int]' = (255, 255, 255, 255),
                  detail: bool = False,
                  is_game: bool = False,
                  is_tele: bool = False,
@@ -488,7 +485,7 @@ class ItemSoundLayer(ItemLayer):
 class ItemGroup(Item):
     def __init__(self,
                  manager: ItemManager,
-                 layers: list[ItemLayer],
+                 layers: 'list[ItemLayer]',
                  x_offset: int = 0,
                  y_offset: int = 0,
                  x_parallax: int = 100,

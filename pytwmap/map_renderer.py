@@ -1,4 +1,5 @@
 from PIL import Image
+from typing import Tuple
 
 from pytwmap.constants import TileFlag
 from pytwmap.items import ItemImage, ItemImageExternal, ItemLayer, ItemManager, ItemQuadLayer, ItemTileLayer
@@ -10,7 +11,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame  # noqa: E402
 
 
-map_slice = tuple[int, int, int, int]
+MapSlice = Tuple[int, int, int, int]
 
 
 class MapRenderer:
@@ -47,11 +48,11 @@ class MapRenderer:
                     self._add_tileset(layer.image)
         self._add_tileset(self._entities)
 
-    def render_layer(self, layer: ItemLayer, slice: map_slice, tile_scale: int) -> Image.Image:
+    def render_layer(self, layer: ItemLayer, slice: MapSlice, tile_scale: int) -> Image.Image:
         _, _, w, h = slice
-        return Image.frombytes('RGBA', (w * tile_scale, h * tile_scale), pygame.image.tostring(self.render_layer(layer, slice, tile_scale), 'RGBA'))  # type: ignore
+        return Image.frombytes('RGBA', (w * tile_scale, h * tile_scale), pygame.image.tostring(self._render_layer(layer, slice, tile_scale), 'RGBA'))  # type: ignore
 
-    def _render_layer(self, layer: ItemLayer, slice: map_slice, tile_scale: int):
+    def _render_layer(self, layer: ItemLayer, slice: 'tuple[int, int, int, int]', tile_scale: int):
         if isinstance(layer, ItemTileLayer):
             return self._render_tile_layer(layer, slice, tile_scale)  # type: ignore
         elif isinstance(layer, ItemQuadLayer):
@@ -59,7 +60,7 @@ class MapRenderer:
         else:
             raise RuntimeError('cannot render layer')
 
-    def _render_tile_layer(self, layer: ItemTileLayer[TileManager], slice: map_slice, tile_scale: int):
+    def _render_tile_layer(self, layer: ItemTileLayer[TileManager], slice: MapSlice, tile_scale: int):
         x_0, y_0, w, h = slice
 
         if layer.is_game or layer.is_front or layer.is_tele or layer.is_switch or layer.is_tune or layer.is_speedup:

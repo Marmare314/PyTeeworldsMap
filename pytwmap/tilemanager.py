@@ -41,6 +41,13 @@ class TileManager:
     def set_id(self, x: int, y: int, value: int) -> None:
         raise NotImplementedError()
 
+    def resize(self, new_width: int, new_height: int):
+        # TODO: keep already existing tiles
+        needed_bytes = new_width * new_height * self._tile_bytes
+        self._width = new_width
+        self._height = new_height
+        self._data = bytearray(needed_bytes)
+
     @property
     def width(self):
         return self._width

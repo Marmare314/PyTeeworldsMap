@@ -96,7 +96,7 @@ class DataFileWriter:
         self._item_types[ItemType.LAYER] += 1
         self._items[ItemType.LAYER].append(c_items)
 
-    def _construct_item_tile_layer(self, item: ItemTileLayer[TileManager]) -> list[c_struct]:
+    def _construct_item_tile_layer(self, item: ItemTileLayer[TileManager]) -> 'list[c_struct]':
         c_item_header = CItemLayer()
         c_item_header.version = c_int32(-1)
         c_item_header.type = c_int32(2)
@@ -189,7 +189,7 @@ class DataFileWriter:
         self._item_types[ItemType.GROUP] += 1
         self._items[ItemType.GROUP].append([c_item])
 
-    def _register_data_str_list(self, data: list[str]):
+    def _register_data_str_list(self, data: 'list[str]'):
         byte_data = b''
         for s in data:
             byte_data += s.encode('utf8') + b'\0'
