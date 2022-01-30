@@ -12,6 +12,9 @@ TITEM = TypeVar('TITEM', bound='Item')
 TMANAGER = TypeVar('TMANAGER', bound=TileManager)
 
 
+ColorTuple = Tuple[int, int, int, int]
+
+
 class ItemManager:
     def __init__(self):
         self._item_set: set[Item] = set()
@@ -206,8 +209,14 @@ class ItemImage(Item):
         self._external = False
 
     @staticmethod
+    def _remove_file_extension(name: str):
+        if name.endswith('.png'):
+            return name[:-4]
+        raise RuntimeError('Invalid file extension')
+
+    @staticmethod
     def _directory_has_image(path: str, name: str):
-        files = [x.rstrip('.png') for x in os.listdir(path)]
+        files = [ItemImage._remove_file_extension(x) for x in os.listdir(path)]
         return name in files
 
     @staticmethod
@@ -305,7 +314,7 @@ class ItemTileLayer(ItemLayer, Generic[TMANAGER]):
                  color_envelope_ref: Optional[ItemEnvelope] = None,
                  image_ref: Optional[ItemImage] = None,
                  color_envelope_offset: int = 0,
-                 color: 'tuple[int, int, int, int]' = (255, 255, 255, 255),
+                 color: ColorTuple = (255, 255, 255, 255),
                  detail: bool = False,
                  is_game: bool = False,
                  is_tele: bool = False,
