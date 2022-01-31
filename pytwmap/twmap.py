@@ -80,6 +80,22 @@ class TWMap:
         return list(self._layers_generator())
 
     @property
+    def design_layers(self):
+        for layer in self._layers_generator():
+            if layer not in self.gameplay_layers:
+                yield layer
+
+    def _gameplay_layers_generator(self):
+        for layer in self._layers_generator():
+            if layer == self.game_layer or layer == self.tele_layer or layer == self.speedup_layer or layer == self.front_layer or layer == self.switch_layer or layer == self.tune_layer:
+                if layer is not None:
+                    yield layer
+
+    @property
+    def gameplay_layers(self):
+        return list(self._gameplay_layers_generator())
+
+    @property
     def game_layer(self):
         if self._game_layer is None:
             raise RuntimeError('no gamelayer found')

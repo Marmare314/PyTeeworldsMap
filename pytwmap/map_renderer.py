@@ -1,5 +1,4 @@
 from PIL import Image
-from typing import Tuple
 
 from pytwmap.constants import TileFlag
 from pytwmap.items import ItemImage, ItemImageExternal, ItemLayer, ItemQuadLayer, ItemTileLayer
@@ -12,9 +11,11 @@ import pygame  # noqa: E402
 
 
 class MapRenderer:
-    def __init__(self, image_size: Tuple[int, int], map_ref: TWMap):
+    def __init__(self, map_ref: TWMap, image_size: tuple[int, int], viewer_pos: tuple[int, int] = (0, 0), time: int = 0):
         self._map_ref = map_ref
         self._tilesets: dict[ItemImage, list[pygame.surface.Surface]] = {}
+        self._viewer_pos_x, self._viewer_pos_y = viewer_pos
+        self._time = 0
 
         self._width, self._height = image_size
         self._image_buffer = pygame.surface.Surface = pygame.Surface(image_size, flags=pygame.SRCALPHA)
@@ -53,15 +54,23 @@ class MapRenderer:
     def get_image(self) -> Image.Image:
         return Image.frombytes('RGBA', (self._width, self._height), pygame.image.tostring(self._image_buffer, 'RGBA'))  # type: ignore
 
-    def render_layer(self, layer: ItemLayer, x0: int, y0: int, tile_scale: int):
+    def render_map_design(self, x_start: int, y_start: int, tile_scale: int):
+        for layer in self._map_ref.design_layers:
+            self.render_layer(layer, x_start, y_start, tile_scale)
+
+    def render_map_gameplay(self, x_start: int, y_start: int, tile_scale: int):
+        for layer in self._map_ref.gameplay_layers:
+            self.render_layer(layer, x_start, y_start, tile_scale)
+
+    def render_layer(self, layer: ItemLayer, x_start: int, y_start: int, tile_scale: int):
         if isinstance(layer, ItemTileLayer):
-            return self._render_tile_layer(layer, x0, y0, tile_scale)  # type: ignore
+            self._render_tile_layer(layer, x_start, y_start, tile_scale)  # type: ignore
         elif isinstance(layer, ItemQuadLayer):
             raise NotImplementedError()
         else:
             raise RuntimeError('cannot render layer')
 
-    def _render_tile_layer(self, layer: ItemTileLayer[TileManager], x0: int, y0: int, tile_scale: int):
+    def _render_tile_layer(self, layer: ItemTileLayer[TileManager], x_start: int, y_start: int, tile_scale: int):
         if layer in [self._map_ref.game_layer, self._map_ref.tele_layer, self._map_ref.speedup_layer, self._map_ref.front_layer, self._map_ref.switch_layer, self._map_ref.tune_layer]:
             image_item = self._entities
         elif layer.image is None:
@@ -71,23 +80,48 @@ class MapRenderer:
         if image_item not in self._tilesets:
             raise RuntimeError('image reference not found')
 
+        offset_x = 0
+        offset_y = 0
+        parallax_x = 100
+        parallax_y = 100
+
+        for group in self._map_ref.groups:
+            if layer in group.layers:
+                offset_x = group.x_offset
+                offset_y = group.y_offset
+                parallax_x = group.x_parallax
+                parallax_y = group.y_parallax
+
+        tile_x, tile_y = x_start // 32, y_start // 32
+        offset_x += ((x_start % 32) * tile_scale) // 32
+        offset_y += ((y_start % 32) * tile_scale) // 32
+
+        offset_x += (parallax_x * self._viewer_pos_x) // 100
+        offset_y += (parallax_y * self._viewer_pos_y) // 100
+
         tileset = self._tilesets[image_item]
-
-        # buffer = pygame.Surface((w * tile_scale, h * tile_scale), flags=pygame.SRCALPHA)
-
-        for dx in range(self._width // tile_scale):
-            for dy in range(self._height // tile_scale):
-                if x0 + dx < 0 or layer.width <= x0 + dx or y0 + dy < 0 or layer.height <= y0 + dy:
+        for dx in range(self._width // tile_scale + 1):
+            for dy in range(self._height // tile_scale + 1):
+                if tile_x + dx < 0 or layer.width <= tile_x + dx or tile_y + dy < 0 or layer.height <= tile_y + dy:
                     continue
 
-                t = layer.tiles.get_id(x0 + dx, y0 + dy)
-                tile_img = tileset[t]
+                t = layer.tiles.get_id(tile_x + dx, tile_y + dy)
+
+                # blend color
+                # TODO: envelope color
+                tile_img = pygame.Surface((64, 64), flags=pygame.SRCALPHA)
+                tile_img.fill(layer.color)
+                tile_img.blit(tileset[t], (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+
+                # transform tiles
                 if isinstance(layer.tiles, VanillaTileManager):
-                    if layer.tiles.has_flag(x0 + dx, y0 + dy, TileFlag.VFLIP):
+                    if layer.tiles.has_flag(tile_x + dx, tile_y + dy, TileFlag.VFLIP):
                         tile_img = pygame.transform.flip(tile_img, True, False)
-                    if layer.tiles.has_flag(x0 + dx, y0 + dy, TileFlag.HFLIP):
+                    if layer.tiles.has_flag(tile_x + dx, tile_y + dy, TileFlag.HFLIP):
                         tile_img = pygame.transform.flip(tile_img, False, True)
-                    if layer.tiles.has_flag(x0 + dx, y0 + dy, TileFlag.ROTATE):
+                    if layer.tiles.has_flag(tile_x + dx, tile_y + dy, TileFlag.ROTATE):
                         tile_img = pygame.transform.rotate(tile_img, -90)
+
+                # scale tile
                 tile_img = pygame.transform.scale(tile_img, (tile_scale, tile_scale))
-                self._image_buffer.blit(tile_img, (dx * tile_scale, dy * tile_scale))
+                self._image_buffer.blit(tile_img, (dx * tile_scale - offset_x, dy * tile_scale - offset_y))
