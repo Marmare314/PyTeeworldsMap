@@ -1,6 +1,8 @@
+from typing import Optional
 from pytwmap.datafile_reader import DataFileReader
 from pytwmap.datafile_writer import DataFileWriter
-from pytwmap.items import ItemManager
+from pytwmap.items import ItemQuadLayer, ItemVersion, ItemInfo, ItemTileLayer, ItemGroup
+from pytwmap.tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileManager, TuneTileManager, VanillaTileManager
 
 
 # TODO: make exceptions/asserts consistent
@@ -9,69 +11,121 @@ from pytwmap.items import ItemManager
 
 class TWMap:
     def __init__(self):
-        self._item_manager = ItemManager()
+        self.version = ItemVersion(version=1)
+        self.info = ItemInfo()
+        self.game_layer = ItemTileLayer(
+            tiles=VanillaTileManager(50, 50),
+            name='Game'
+        )
+        self.groups = [ItemGroup(
+            layers=[self.game_layer],
+            name='Game'
+        )]
 
     def open(self, path: str):
-        self._item_manager.clear()
-
         with open(path, 'rb') as file:
-            data = DataFileReader(file.read(), self._item_manager)
+            data = DataFileReader(file.read())
 
-        data.add_version()
-        data.add_info()
-        data.add_images()
-        data.add_layers()
-        data.add_groups()
+        self.version = data.get_version()
+        self.info = data.get_info()
 
-        # asserts that a game_layer exists
-        self._item_manager.game_layer
+        self.groups = data.get_groups()
+
+        if data.game_layer is None:
+            raise RuntimeError('no gamelayer found')
+        self.game_layer = data.game_layer
+        self.tele_layer = data.tele_layer
+        self.speedup_layer = data.speedup_layer
+        self.front_layer = data.front_layer
+        self.switch_layer = data.switch_layer
+        self.tune_layer = data.tune_layer
 
     def save(self, path: str):
         data = DataFileWriter()
 
-        self._item_manager.clean_ids()
+        data.set_special_layers(
+            self.game_layer,
+            self.tele_layer,
+            self.speedup_layer,
+            self.front_layer,
+            self.switch_layer,
+            self.tune_layer
+        )
 
-        data.register_item(self._item_manager.version)
-        data.register_item(self._item_manager.info)
+        data.register_version(self.version)
+        data.register_info(self.info)
 
-        for image in self._item_manager.images:
-            data.register_item(image)
-
-        for layer in self._item_manager.layers:
-            data.register_item(layer)
-
-        for group in self._item_manager.groups:
-            data.register_item(group)
+        for group in self.groups:
+            data.register_group(group)
 
         return data.write(path)
 
-    @property
-    def manager(self):
-        return self._item_manager
-
-    @property
-    def info(self):
-        return self._item_manager.info
+    def _images_generator(self):
+        for layer in self.layers:
+            if isinstance(layer, ItemTileLayer) or isinstance(layer, ItemQuadLayer):
+                if layer.image is not None:
+                    yield layer.image
 
     @property
     def images(self):
-        return list(self._item_manager.images)
+        return list(self._images_generator())
+
+    def _layers_generator(self):
+        for group in self.groups:
+            for layer in group.layers:
+                yield layer
 
     @property
     def layers(self):
-        return list(self._item_manager.layers)
-
-    @property
-    def groups(self):
-        return list(self._item_manager.groups)
+        return list(self._layers_generator())
 
     @property
     def game_layer(self):
-        return self._item_manager.game_layer
+        if self._game_layer is None:
+            raise RuntimeError('no gamelayer found')
+        return self._game_layer
 
+    @game_layer.setter
+    def game_layer(self, layer: ItemTileLayer[VanillaTileManager]):
+        self._game_layer = layer
 
-if __name__ == '__main__':
-    m = TWMap()
-    m.open('../test_maps/XmasMove.map')
-    # m.save('../test_maps/XmasMoveSaved.map')
-    m.save('/home/marek/.teeworlds/maps/XmasMoveSaved.map')
+    # TODO: should these be exposed or properties?
+    @property
+    def tele_layer(self):
+        return self._tele_layer
+
+    @tele_layer.setter
+    def tele_layer(self, layer: Optional[ItemTileLayer[TeleTileManager]]):
+        self._tele_layer = layer
+
+    @property
+    def speedup_layer(self):
+        return self._speedup_layer
+
+    @speedup_layer.setter
+    def speedup_layer(self, layer: Optional[ItemTileLayer[SpeedupTileManager]]):
+        self._speedup_layer = layer
+
+    @property
+    def front_layer(self):
+        return self._front_layer
+
+    @front_layer.setter
+    def front_layer(self, layer: Optional[ItemTileLayer[VanillaTileManager]]):
+        self._front_layer = layer
+
+    @property
+    def switch_layer(self):
+        return self._switch_layer
+
+    @switch_layer.setter
+    def switch_layer(self, layer: Optional[ItemTileLayer[SwitchTileManager]]):
+        self._switch_layer = layer
+
+    @property
+    def tune_layer(self):
+        return self._tune_layer
+
+    @tune_layer.setter
+    def tune_layer(self, layer: Optional[ItemTileLayer[TuneTileManager]]):
+        self._tune_layer = layer

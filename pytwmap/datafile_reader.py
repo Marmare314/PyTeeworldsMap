@@ -5,7 +5,7 @@ from typing import Optional, Type, TypeVar
 from pytwmap.stringfile import StringFile
 from pytwmap.structs import c_int32
 from pytwmap.map_structs import CItemEnvelope, CItemGroup, CItemLayer, CItemQuadLayer, CItemSound, CItemSoundLayer, CItemTileLayer, CVersionHeader, CHeader, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage, c_struct
-from pytwmap.items import ItemEnvelope, ItemGroup, ItemImage, ItemImageExternal, ItemImageInternal, ItemLayer, ItemManager, ItemVersion, ItemInfo, ItemTileLayer
+from pytwmap.items import ItemEnvelope, ItemGroup, ItemImage, ItemImageExternal, ItemImageInternal, ItemLayer, ItemVersion, ItemInfo, ItemTileLayer
 from pytwmap.constants import ItemType, LayerFlags, LayerType, TileLayerFlags
 from pytwmap.tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileManager, TuneTileManager, VanillaTileManager
 
@@ -13,11 +13,24 @@ from pytwmap.tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileM
 T = TypeVar('T', bound=c_struct)
 
 
+# TODO: rename with c_item
 class DataFileReader:
-    def __init__(self, file_data: bytes, manager: ItemManager):
+    def __init__(self, file_data: bytes):
         self._data = StringFile(file_data)
-        self._item_manager = manager
 
+        # init special layer references
+        self.game_layer: 'Optional[ItemTileLayer[VanillaTileManager]]' = None
+        self.tele_layer: 'Optional[ItemTileLayer[TeleTileManager]]' = None
+        self.speedup_layer: 'Optional[ItemTileLayer[SpeedupTileManager]]' = None
+        self.front_layer: 'Optional[ItemTileLayer[VanillaTileManager]]' = None
+        self.switch_layer: 'Optional[ItemTileLayer[SwitchTileManager]]' = None
+        self.tune_layer: 'Optional[ItemTileLayer[TuneTileManager]]' = None
+
+        # item caches
+        self._image_cache: 'dict[int, ItemImage]' = {}
+        self._layer_cache: 'dict[int, ItemLayer]' = {}
+
+        # read header of datafile
         self._ver_header = CVersionHeader.from_data(self._data)
         if self._ver_header.magic not in ['DATA', 'ATAD']:
             raise RuntimeError('wrong magic bytes')
@@ -119,19 +132,15 @@ class DataFileReader:
 
         return item_type.from_data(self._data)
 
-    def add_version(self):
+    def get_version(self):
         item = self._get_item(CItemVersion, 0)
 
         if item.version != 1:
             raise RuntimeError('unsupported ItemVersion version')
 
-        ItemVersion(
-            manager=self._item_manager,
-            version=item.version,
-            _id=0
-        )
+        return ItemVersion(version=item.version)
 
-    def add_info(self):
+    def get_info(self):
         item = self._get_item(CItemInfo, 0)
 
         if item.version != 1:
@@ -143,43 +152,44 @@ class DataFileReader:
         license = self._get_data_str(item.license_ptr)
         settings: list[str] = self._get_data_str_list(item.settings_ptr)
 
-        ItemInfo(
-            manager=self._item_manager,
+        return ItemInfo(
             author=author,
             mapversion=mapversion,
             credits=credits,
             license=license,
-            settings=settings,
-            _id=0
+            settings=settings
         )
 
-    def add_images(self):
-        for i in range(self._get_num_items(CItemImage)):
-            item = self._get_item(CItemImage, i)
+    def _get_image(self, index: int):
+        # check for optional pointers
+        if index < 0:
+            return None
 
-            if item.version != 1:
-                raise RuntimeError('unexpected tilelayer version')
+        if index in self._image_cache:
+            return self._image_cache[index]
 
-            name = self._get_data_str(item.name_ptr)
+        item = self._get_item(CItemImage, index)
 
-            if item.external:
-                ItemImageExternal(
-                    manager=self._item_manager,
-                    name=name,
-                    _id=i
-                )
-            else:
-                loaded_img: Image.Image = Image.frombytes(  # type: ignore
-                    'RGBA',
-                    (item.width, item.height),
-                    self._get_data(item.data_ptr)
-                )
-                ItemImageInternal(
-                    manager=self._item_manager,
-                    image=loaded_img,
-                    name=name,
-                    _id=i
-                )
+        if item.version != 1:
+            raise RuntimeError('unexpected tilelayer version')
+
+        name = self._get_data_str(item.name_ptr)
+
+        if item.external:
+            img_item = ItemImageExternal(name=name)
+        else:
+            loaded_img: Image.Image = Image.frombytes(  # type: ignore
+                'RGBA',
+                (item.width, item.height),
+                self._get_data(item.data_ptr)
+            )
+            img_item = ItemImageInternal(image=loaded_img, name=name)
+
+        self._image_cache[index] = img_item
+        return img_item
+
+    def _get_envelope(self, index: int):
+        pass
 
     def _add_tile_layer(self, index: int, detail: bool):
         item = self._get_item(CItemTileLayer, index)
@@ -187,6 +197,7 @@ class DataFileReader:
         if item.version != 3:
             raise RuntimeError('unexpected tilelayer version')
 
+        # read flags
         flags = item.flags
         is_game = TileLayerFlags.GAME & flags > 0
         is_tele = TileLayerFlags.TELE & flags > 0
@@ -195,6 +206,7 @@ class DataFileReader:
         is_switch = TileLayerFlags.SWITCH & flags > 0
         is_tune = TileLayerFlags.TUNE & flags > 0
 
+        # set managertype and data_ptr
         manager_type = VanillaTileManager
         data_ptr = item.data_ptr
         if is_tele:
@@ -212,31 +224,41 @@ class DataFileReader:
             manager_type = TuneTileManager
             data_ptr = item.data_tune_ptr
 
-        env_ref: Optional[ItemEnvelope] = self._item_manager.find_item(ItemEnvelope, item.color_envelope_ref)
+        # find references
+        env_ref: Optional[ItemEnvelope] = self._get_envelope(item.color_envelope_ref)
+        image_ref: Optional[ItemImage] = self._get_image(item.image_ref)
 
-        image_ref: Optional[ItemImage] = self._item_manager.find_item(ItemImage, item.image_ref)
+        tile_manager = manager_type(
+            item.width,
+            item.height,
+            data=self._get_data(data_ptr)
+        )
 
-        width = item.width
-        height = item.height
-        tile_manager = manager_type(width, height, data=self._get_data(data_ptr))
-
-        ItemTileLayer(
-            manager=self._item_manager,
+        layer_item = ItemTileLayer(
             tiles=tile_manager,
             color_envelope_ref=env_ref,
             image_ref=image_ref,
             color_envelope_offset=item.color_envelope_offset,
             color=item.color.as_tuple(),
             detail=detail,
-            is_game=is_game,
-            is_tele=is_tele,
-            is_speedup=is_speedup,
-            is_front=is_front,
-            is_switch=is_switch,
-            is_tune=is_tune,
-            name=item.name,
-            _id=index
+            name=item.name
         )
+
+        if is_game:
+            self.game_layer = layer_item  # type: ignore
+        elif is_tele:
+            self.tele_layer = layer_item  # type: ignore
+        elif is_speedup:
+            self.speedup_layer = layer_item  # type: ignore
+        elif is_front:
+            self.front_layer = layer_item  # type: ignore
+        elif is_switch:
+            self.switch_layer = layer_item  # type: ignore
+        elif is_tune:
+            self.tune_layer = layer_item  # type: ignore
+
+        self._layer_cache[index] = layer_item
+        return layer_item
 
     def _add_quad_layer(self, index: int, detail: bool):
         # if item_data.version.value != 3:
@@ -248,20 +270,26 @@ class DataFileReader:
         #     raise RuntimeError('unexpected tilelayer version')
         pass
 
-    def add_layers(self):
-        for i in range(self._get_num_items(CItemLayer)):
-            item = self._get_item(CItemLayer, i)
+    def _get_layer(self, index: int):
+        # check for optional pointers
+        if index < 0:
+            return None
 
-            detail = LayerFlags.DETAIL & item.flags > 0
+        if index in self._layer_cache:
+            return self._layer_cache[index]
 
-            if item.type in [LayerType.SOUNDS, LayerType.SOUNDS_DEPCRECATED]:
-                self._add_sound_layer(i, detail)
-            elif item.type == LayerType.QUADS:
-                self._add_quad_layer(i, detail)
-            else:
-                self._add_tile_layer(i, detail)
+        item = self._get_item(CItemLayer, index)
 
-    def add_groups(self):
+        detail = LayerFlags.DETAIL & item.flags > 0
+
+        if item.type in [LayerType.SOUNDS, LayerType.SOUNDS_DEPCRECATED]:
+            return self._add_sound_layer(index, detail)
+        elif item.type == LayerType.QUADS:
+            return self._add_quad_layer(index, detail)
+        else:
+            return self._add_tile_layer(index, detail)
+
+    def _get_groups_generator(self):
         for i in range(self._get_num_items(CItemGroup)):
             item = self._get_item(CItemGroup, i)
 
@@ -270,17 +298,16 @@ class DataFileReader:
 
             layer_refs: list[ItemLayer] = []
             for k in range(item.num_layers):
-                ref = self._item_manager.find_item(ItemLayer, item.start_layer + k)
+                ref = self._get_layer(item.start_layer + k)
                 if ref:
                     layer_refs.append(ref)
                 # TODO: enable when all layers have been implemented
                 # else:
                 #     raise RuntimeError('')
             if len(layer_refs) == 0:
-                continue  # TODO: disable when all layers have been implemented
+                continue  # TODO: remove when all layers have been implemented
 
-            ItemGroup(
-                manager=self._item_manager,
+            yield ItemGroup(
                 layers=layer_refs,
                 x_offset=item.x_offset,
                 y_offset=item.y_offset,
@@ -291,6 +318,8 @@ class DataFileReader:
                 clip_y=item.clip_y,
                 clip_width=item.clip_width,
                 clip_height=item.clip_height,
-                name=item.name,
-                _id=i
+                name=item.name
             )
+
+    def get_groups(self):
+        return list(self._get_groups_generator())

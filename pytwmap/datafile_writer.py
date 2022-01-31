@@ -1,3 +1,4 @@
+from typing import Optional
 import zlib
 from collections import defaultdict
 
@@ -5,7 +6,7 @@ from pytwmap.constants import ItemType
 from pytwmap.map_structs import CHeader, CItemGroup, CItemHeader, CItemImage, CItemInfo, CItemLayer, CItemTileLayer, CItemType, CItemVersion, CVersionHeader
 from pytwmap.stringfile import StringFile
 from pytwmap.structs import c_i32_color, c_intstr3, c_rawstr4, c_int32, c_struct
-from pytwmap.items import Item, ItemGroup, ItemImage, ItemInfo, ItemLayer, ItemVersion, ItemQuadLayer, ItemSoundLayer, ItemTileLayer
+from pytwmap.items import ItemEnvelope, ItemGroup, ItemImage, ItemInfo, ItemLayer, ItemVersion, ItemQuadLayer, ItemSoundLayer, ItemTileLayer
 from pytwmap.tilemanager import TileManager
 
 
@@ -16,32 +17,35 @@ class DataFileWriter:
         self._item_types: defaultdict[int, int] = defaultdict(int)
         self._items: defaultdict[int, list[list[c_struct]]] = defaultdict(list)
 
+        self._envelope_refs: dict[ItemEnvelope, int] = {}
+        self._image_refs: dict[ItemImage, int] = {}
+
         self._data = StringFile(b'')
         self._data_offsets: list[int] = []
         self._data_sizes: list[int] = []
 
-    def register_item(self, item: Item):
-        if isinstance(item, ItemVersion):
-            self._register_item_version(item)
-        elif isinstance(item, ItemInfo):
-            self._register_item_info(item)
-        elif isinstance(item, ItemImage):
-            self._register_item_image(item)
-        elif isinstance(item, ItemLayer):
-            self._register_item_layer(item)
-        elif isinstance(item, ItemGroup):
-            self._register_item_group(item)
-        else:
-            raise NotImplementedError()
+    def set_special_layers(self,
+                           game_layer: ItemLayer,
+                           tele_layer: Optional[ItemLayer],
+                           speedup_layer: Optional[ItemLayer],
+                           front_layer: Optional[ItemLayer],
+                           switch_layer: Optional[ItemLayer],
+                           tune_layer: Optional[ItemLayer]):
+        self._game_layer = game_layer
+        self._tele_layer = tele_layer
+        self._speedup_layer = speedup_layer
+        self._front_layer = front_layer
+        self._switch_layer = switch_layer
+        self._tune_layer = tune_layer
 
-    def _register_item_version(self, item: ItemVersion):
+    def register_version(self, item: ItemVersion):
         c_item = CItemVersion()
         c_item.version = c_int32(item.version)
 
-        self._item_types[ItemType.VERSION] += 1
-        self._items[ItemType.VERSION].append([c_item])
+        self._item_types[ItemType.VERSION] = 1
+        self._items[ItemType.VERSION] = [[c_item]]
 
-    def _register_item_info(self, item: ItemInfo):
+    def register_info(self, item: ItemInfo):
         author_ptr = -1
         mapversion_ptr = -1
         credits_ptr = -1
@@ -67,10 +71,16 @@ class DataFileWriter:
         c_item.license_ptr = c_int32(license_ptr)
         c_item.settings_ptr = c_int32(settings_ptr)
 
-        self._item_types[ItemType.INFO] += 1
-        self._items[ItemType.INFO].append([c_item])
+        self._item_types[ItemType.INFO] = 1
+        self._items[ItemType.INFO] = [[c_item]]
 
-    def _register_item_image(self, item: ItemImage):
+    def _register_image(self, item: Optional[ItemImage]):
+        if item is None:
+            return -1
+
+        if item in self._image_refs:
+            return self._image_refs[item]
+
         name_ptr = self._register_data_str(item.name)
         data_ptr = -1
         if not item.external:
@@ -84,19 +94,25 @@ class DataFileWriter:
         c_item.name_ptr = c_int32(name_ptr)
         c_item.data_ptr = c_int32(data_ptr)
 
+        self._image_refs[item] = len(self._items[ItemType.IMAGE])
         self._item_types[ItemType.IMAGE] += 1
         self._items[ItemType.IMAGE].append([c_item])
 
-    def _register_item_layer(self, item: ItemLayer):
+        return self._image_refs[item]
+
+    def _register_envelope(self, item: Optional[ItemEnvelope]):
+        return -1
+
+    def _register_layer(self, item: ItemLayer):
         if isinstance(item, ItemTileLayer):
-            c_items = self._construct_item_tile_layer(item)  # type: ignore
+            c_items = self._construct_tile_layer(item)  # type: ignore
         else:
             raise NotImplementedError()
 
         self._item_types[ItemType.LAYER] += 1
         self._items[ItemType.LAYER].append(c_items)
 
-    def _construct_item_tile_layer(self, item: ItemTileLayer[TileManager]) -> 'list[c_struct]':
+    def _construct_tile_layer(self, item: ItemTileLayer[TileManager]) -> 'list[c_struct]':
         c_item_header = CItemLayer()
         c_item_header.version = c_int32(-1)
         c_item_header.type = c_int32(2)
@@ -119,50 +135,43 @@ class DataFileWriter:
         c_item_body.data_front_ptr = c_int32(-1)
         c_item_body.data_switch_ptr = c_int32(-1)
         c_item_body.data_tune_ptr = c_int32(-1)
-        if item.is_game:
+        if item == self._game_layer:
             c_item_body.flags = c_int32(1)
-        elif item.is_tele:
+        elif item == self._tele_layer:
             c_item_body.flags = c_int32(2)
             c_item_body.data_tele_ptr = stored_data_ptr
             c_item_body.data_ptr = c_int32(self._register_data(bytes(item.width * item.height * 2)))
-        elif item.is_speedup:
+        elif item == self._speedup_layer:
             c_item_body.flags = c_int32(4)
             c_item_body.data_speedup_ptr = stored_data_ptr
             c_item_body.data_ptr = c_int32(self._register_data(bytes(item.width * item.height * 6)))
-        elif item.is_front:
+        elif item == self._front_layer:
             c_item_body.flags = c_int32(8)
             c_item_body.data_front_ptr = stored_data_ptr
             c_item_body.data_ptr = c_int32(self._register_data(bytes(item.width * item.height * 4)))
-        elif item.is_switch:
+        elif item == self._switch_layer:
             c_item_body.flags = c_int32(16)
             c_item_body.data_switch_ptr = stored_data_ptr
             c_item_body.data_ptr = c_int32(self._register_data(bytes(item.width * item.height * 4)))
-        elif item.is_tune:
+        elif item == self._tune_layer:
             c_item_body.flags = c_int32(32)
             c_item_body.data_tune_ptr = stored_data_ptr
             c_item_body.data_ptr = c_int32(self._register_data(bytes(item.width * item.height * 2)))
 
-        if item.color_envelope is None:
-            c_item_body.color_envelope_ref = c_int32(-1)
-        else:
-            c_item_body.color_envelope_ref = c_int32(item.color_envelope.item_id)
-
-        if item.image is None:
-            c_item_body.image_ref = c_int32(-1)
-        else:
-            c_item_body.image_ref = c_int32(item.image.item_id)
+        c_item_body.color_envelope_ref = c_int32(self._register_envelope(item.color_envelope))
+        c_item_body.image_ref = c_int32(self._register_image(item.image))
 
         c_item_body.name = c_intstr3(item.name)
 
         return [c_item_header, c_item_body]
 
-    def _construct_item_quad_layer(self, item: ItemQuadLayer):
+    def _construct_quad_layer(self, item: ItemQuadLayer):
         pass
 
-    def _construct_item_sound_layer(self, item: ItemSoundLayer):
+    def _construct_sound_layer(self, item: ItemSoundLayer):
         pass
 
-    def _register_item_group(self, item: ItemGroup):
+    def register_group(self, item: ItemGroup):
         c_item = CItemGroup()
         c_item.version = c_int32(3)
         c_item.x_offset = c_int32(item.x_offset)
@@ -170,13 +179,15 @@ class DataFileWriter:
         c_item.x_parallax = c_int32(item.x_parallax)
         c_item.y_parallax = c_int32(item.y_parallax)
 
-        # TODO: raise error when all layers have been implemented
+        # TODO: how to handle this
         if len(item.layers) == 0:
-            # raise NotImplementedError('group without layers cannot be handled yet')
-            return
+            raise NotImplementedError('group without layers cannot be handled yet')
 
-        c_item.start_layer = c_int32(item.layers[0].item_id)
+        c_item.start_layer = c_int32(len(self._items[ItemType.LAYER]))
         c_item.num_layers = c_int32(len(item.layers))
+
+        for layer in item.layers:
+            self._register_layer(layer)
 
         c_item.clipping = c_int32(item.clipping)
         c_item.clip_x = c_int32(item.clip_x)

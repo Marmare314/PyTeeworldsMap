@@ -7,7 +7,6 @@ from pytwmap.tilemanager import SpeedupTileManager as SpeedupTileManager
 from pytwmap.tilemanager import SwitchTileManager as SwitchTileManager
 from pytwmap.tilemanager import TuneTileManager as TuneTileManager
 
-from pytwmap.items import ItemManager as ItemManager
 from pytwmap.items import Item as Item
 from pytwmap.items import ItemVersion as ItemVersion
 from pytwmap.items import ItemInfo as ItemInfo
