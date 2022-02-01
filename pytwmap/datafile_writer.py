@@ -5,7 +5,7 @@ from collections import defaultdict
 from pytwmap.constants import ItemType
 from pytwmap.map_structs import CHeader, CItemGroup, CItemHeader, CItemImage, CItemInfo, CItemLayer, CItemTileLayer, CItemType, CItemVersion, CVersionHeader
 from pytwmap.stringfile import StringFile
-from pytwmap.structs import c_i32_color, c_intstr3, c_rawstr4, c_int32, c_struct
+from pytwmap.structs import c_int32_color, c_intstr3, c_rawstr4, c_int32, c_struct
 from pytwmap.items import ItemEnvelope, ItemGroup, ItemImage, ItemInfo, ItemLayer, ItemVersion, ItemQuadLayer, ItemSoundLayer, ItemTileLayer
 from pytwmap.tilemanager import TileManager
 
@@ -122,7 +122,7 @@ class DataFileWriter:
         c_item_body.version = c_int32(3)
         c_item_body.width = c_int32(item.width)
         c_item_body.height = c_int32(item.height)
-        c_item_body.color = c_i32_color.from_values(*item.color)
+        c_item_body.color = c_int32_color.from_values(*item.color)
         c_item_body.color_envelope_offset = c_int32(item.color_envelope_offset)
 
         # TODO: is this actually correct to create a new layer for every ddnet layer?

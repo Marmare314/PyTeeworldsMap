@@ -1,5 +1,5 @@
 from PIL import Image
-from typing import Generic, Optional, TypeVar, Tuple
+from typing import Generic, Optional, TypeVar
 import os
 
 from pytwmap.structs import c_intstr3, c_int32
@@ -10,7 +10,8 @@ TITEM = TypeVar('TITEM', bound='Item')
 TMANAGER = TypeVar('TMANAGER', bound=TileManager)
 
 
-ColorTuple = Tuple[int, int, int, int]
+TPoint = tuple[int, int]
+TColor = tuple[int, int, int, int]
 
 
 class Item:
@@ -148,7 +149,7 @@ class ItemTileLayer(ItemLayer, Generic[TMANAGER]):
                  color_envelope_ref: Optional[ItemEnvelope] = None,
                  image_ref: Optional[ItemImage] = None,
                  color_envelope_offset: int = 0,
-                 color: ColorTuple = (255, 255, 255, 255),
+                 color: TColor = (255, 255, 255, 255),
                  detail: bool = False,
                  name: str = ''):
         super().__init__(detail, name)
@@ -210,7 +211,35 @@ class ItemTileLayer(ItemLayer, Generic[TMANAGER]):
             return f'<tile_layer: {hex(id(self))}>'
 
 
+class ItemQuad(Item):
+    def __init__(self,
+                 corners: tuple[TPoint, TPoint, TPoint, TPoint],
+                 corner_colors: tuple[TColor, TColor, TColor, TColor],
+                 texture_coordinates: tuple[TPoint, TPoint, TPoint, TPoint],
+                 position_envelope_ref: Optional[ItemEnvelope] = None,
+                 position_envelope_offset: int = 0,
+                 color_envelope_ref: Optional[ItemEnvelope] = None,
+                 color_envelope_offset: int = 0):
+        self.corners = corners
+        self.corner_colors = corner_colors
+        self.texture_coords = texture_coordinates
+        self.position_envelope_ref = position_envelope_ref
+        self.position_envelope_offset = position_envelope_offset
+        self.color_envelope_ref = color_envelope_ref
+        self.color_envelope_offset = color_envelope_offset
+
+
 class ItemQuadLayer(ItemLayer):
+    def __init__(self,
+                 quads: list[ItemQuad],
+                 image_ref: Optional[ItemImage] = None,
+                 detail: bool = False,
+                 name: str = ''):
+        super().__init__(detail, name)
+
+        self.quads = quads
+        self.image = image_ref
+
     @property
     def image(self):
         return self._image_ref

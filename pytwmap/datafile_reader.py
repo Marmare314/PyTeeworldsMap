@@ -4,8 +4,8 @@ from typing import Optional, Type, TypeVar
 
 from pytwmap.stringfile import StringFile
 from pytwmap.structs import c_int32
-from pytwmap.map_structs import CItemEnvelope, CItemGroup, CItemLayer, CItemQuadLayer, CItemSound, CItemSoundLayer, CItemTileLayer, CVersionHeader, CHeader, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage, c_struct
-from pytwmap.items import ItemEnvelope, ItemGroup, ItemImage, ItemImageExternal, ItemImageInternal, ItemLayer, ItemVersion, ItemInfo, ItemTileLayer
+from pytwmap.map_structs import CItemEnvelope, CItemGroup, CItemLayer, CItemQuadLayer, CItemSound, CItemSoundLayer, CItemTileLayer, CQuad, CVersionHeader, CHeader, CItemType, CItemVersion, CItemHeader, CItemInfo, CItemImage, c_struct
+from pytwmap.items import ItemEnvelope, ItemGroup, ItemImage, ItemImageExternal, ItemImageInternal, ItemLayer, ItemQuad, ItemQuadLayer, ItemVersion, ItemInfo, ItemTileLayer
 from pytwmap.constants import ItemType, LayerFlags, LayerType, TileLayerFlags
 from pytwmap.tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileManager, TuneTileManager, VanillaTileManager
 
@@ -260,10 +260,49 @@ class DataFileReader:
         self._layer_cache[index] = layer_item
         return layer_item
 
+    def cquad_to_item(self, c_quad: CQuad):
+        corners = tuple([x.as_tuple() for x in c_quad.positions[:-1]])
+        corner_colors = tuple([x.as_tuple() for x in c_quad.colors])
+        texture_coordinates = tuple([x.as_tuple() for x in c_quad.texture_coordinates])
+        assert len(corners) == 4
+        assert len(corner_colors) == 4
+        assert len(texture_coordinates) == 4
+
+        pos_env_ref: Optional[ItemEnvelope] = self._get_envelope(c_quad.position_envelope_ref)
+        col_env_ref: Optional[ItemEnvelope] = self._get_envelope(c_quad.color_envelope_ref)
+
+        return ItemQuad(
+            corners=corners,
+            corner_colors=corner_colors,
+            texture_coordinates=texture_coordinates,
+            position_envelope_ref=pos_env_ref,
+            position_envelope_offset=c_quad.position_envelope_offset,
+            color_envelope_ref=col_env_ref,
+            color_envelope_offset=c_quad.color_envelope_offset
+        )
+
     def _add_quad_layer(self, index: int, detail: bool):
-        # if item_data.version.value != 3:
-        #     raise RuntimeError('unexpected tilelayer version')
-        pass
+        item = self._get_item(CItemQuadLayer, index)
+
+        if item.version != 2:
+            raise RuntimeError('unexpected quadlayer version')
+
+        image_ref: Optional[ItemImage] = self._get_image(item.image_ref)
+
+        # read quads
+        quad_data = self._get_data(item.data_ptr)
+        quad_reader = StringFile(quad_data)
+        c_quads = [CQuad.from_data(quad_reader) for _ in range(item.num_quads)]
+
+        layer_item = ItemQuadLayer(
+            quads=[self.cquad_to_item(x) for x in c_quads],
+            image_ref=image_ref,
+            detail=detail,
+            name=item.name
+        )
+
+        self._layer_cache[index] = layer_item
+        return layer_item
 
     def _add_sound_layer(self, index: int, detail: bool):
         # if item_data.version.value != 3:

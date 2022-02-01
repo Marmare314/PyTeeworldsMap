@@ -1,7 +1,7 @@
 from typing import Optional
 from pytwmap.datafile_reader import DataFileReader
 from pytwmap.datafile_writer import DataFileWriter
-from pytwmap.items import ItemQuadLayer, ItemVersion, ItemInfo, ItemTileLayer, ItemGroup
+from pytwmap.items import ItemQuadLayer, ItemSoundLayer, ItemVersion, ItemInfo, ItemTileLayer, ItemGroup
 from pytwmap.tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileManager, TuneTileManager, VanillaTileManager
 
 
@@ -11,6 +11,13 @@ from pytwmap.tilemanager import SpeedupTileManager, SwitchTileManager, TeleTileM
 
 class TWMap:
     def __init__(self):
+        self._game_layer = None
+        self._tele_layer = None
+        self._speedup_layer = None
+        self._front_layer = None
+        self._switch_layer = None
+        self._tune_layer = None
+
         self.version = ItemVersion(version=1)
         self.info = ItemInfo()
         self.game_layer = ItemTileLayer(
@@ -79,17 +86,19 @@ class TWMap:
     def layers(self):
         return list(self._layers_generator())
 
+    def _design_layers_generator(self):
+        for layer in self._layers_generator():
+            if layer not in self.gameplay_layers and not isinstance(layer, ItemSoundLayer):
+                yield layer
+
     @property
     def design_layers(self):
-        for layer in self._layers_generator():
-            if layer not in self.gameplay_layers:
-                yield layer
+        return list(self._design_layers_generator())
 
     def _gameplay_layers_generator(self):
         for layer in self._layers_generator():
             if layer == self.game_layer or layer == self.tele_layer or layer == self.speedup_layer or layer == self.front_layer or layer == self.switch_layer or layer == self.tune_layer:
-                if layer is not None:
-                    yield layer
+                yield layer
 
     @property
     def gameplay_layers(self):

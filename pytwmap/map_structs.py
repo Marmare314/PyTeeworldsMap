@@ -1,4 +1,4 @@
-from pytwmap.structs import c_intstr3, c_rawstr4, c_int32, c_struct, c_i32_color
+from pytwmap.structs import c_color_array4, c_intstr8, c_point_array4, c_point_array5, c_intstr3, c_rawstr4, c_int32, c_struct, c_int32_color
 
 
 class CVersionHeader(c_struct):
@@ -51,7 +51,16 @@ class CItemImage(c_struct):
 
 
 class CItemEnvelope(c_struct):
-    pass
+    version: c_int32
+    channels: c_int32
+    start_point: c_int32
+    num_points: c_int32
+
+    # ext
+    name: c_intstr8
+
+    # ver2 ext
+    synchronized: c_int32
 
 
 class CItemEnvPointSound(c_struct):
@@ -75,7 +84,7 @@ class CItemEnvPointPosition(c_struct):
 class CItemEnvPointColor(c_struct):
     time: c_int32
     curve_type: c_int32
-    color: c_i32_color
+    color: c_int32_color
 
 
 class CItemGroup(c_struct):
@@ -109,7 +118,7 @@ class CItemTileLayer(c_struct):
     width: c_int32
     height: c_int32
     flags: c_int32
-    color: c_i32_color
+    color: c_int32_color
     color_envelope_ref: c_int32
     color_envelope_offset: c_int32
     image_ref: c_int32
@@ -127,11 +136,23 @@ class CItemTileLayer(c_struct):
 
 
 class CItemQuadLayer(c_struct):
-    pass
+    version: c_int32
+    num_quads: c_int32
+    data_ptr: c_int32
+    image_ref: c_int32
+
+    # ver2 extension
+    name: c_intstr3
 
 
 class CQuad(c_struct):
-    pass
+    positions: c_point_array5
+    colors: c_color_array4
+    texture_coordinates: c_point_array4
+    position_envelope_ref: c_int32
+    position_envelope_offset: c_int32
+    color_envelope_ref: c_int32
+    color_envelope_offset: c_int32
 
 
 class CItemSoundLayer(c_struct):
