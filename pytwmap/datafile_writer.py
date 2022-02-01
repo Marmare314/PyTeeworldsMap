@@ -106,6 +106,8 @@ class DataFileWriter:
     def _register_layer(self, item: ItemLayer):
         if isinstance(item, ItemTileLayer):
             c_items = self._construct_tile_layer(item)  # type: ignore
+        elif isinstance(item, ItemQuadLayer):
+            c_items = self._construct_quad_layer(item)
         else:
             raise NotImplementedError()
 

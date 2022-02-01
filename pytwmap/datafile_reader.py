@@ -324,7 +324,8 @@ class DataFileReader:
         if item.type in [LayerType.SOUNDS, LayerType.SOUNDS_DEPCRECATED]:
             return self._add_sound_layer(index, detail)
         elif item.type == LayerType.QUADS:
-            return self._add_quad_layer(index, detail)
+            # return self._add_quad_layer(index, detail)
+            return None  # TODO: disable when saving quads is done
         else:
             return self._add_tile_layer(index, detail)
 
@@ -338,6 +339,8 @@ class DataFileReader:
             layer_refs: list[ItemLayer] = []
             for k in range(item.num_layers):
                 ref = self._get_layer(item.start_layer + k)
+
+                # TODO: this check is not needed if all layers are implemented
                 if ref:
                     layer_refs.append(ref)
                 # TODO: enable when all layers have been implemented
