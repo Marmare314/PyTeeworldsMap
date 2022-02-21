@@ -1,5 +1,5 @@
 from PIL import Image
-from typing import Generic, Optional, TypeVar
+from typing import Generic, Optional, TypeVar, Tuple, List
 import os
 
 from pytwmap.structs import c_intstr3, c_int32
@@ -10,8 +10,8 @@ TITEM = TypeVar('TITEM', bound='Item')
 TMANAGER = TypeVar('TMANAGER', bound=TileManager)
 
 
-TPoint = tuple[int, int]
-TColor = tuple[int, int, int, int]
+TPoint = Tuple[int, int]
+TColor = Tuple[int, int, int, int]
 
 
 class Item:
@@ -213,14 +213,16 @@ class ItemTileLayer(ItemLayer, Generic[TMANAGER]):
 
 class ItemQuad(Item):
     def __init__(self,
-                 corners: tuple[TPoint, TPoint, TPoint, TPoint],
-                 corner_colors: tuple[TColor, TColor, TColor, TColor],
-                 texture_coordinates: tuple[TPoint, TPoint, TPoint, TPoint],
+                 corners: Tuple[TPoint, TPoint, TPoint, TPoint],
+                 pivot: TPoint,
+                 corner_colors: Tuple[TColor, TColor, TColor, TColor],
+                 texture_coordinates: Tuple[TPoint, TPoint, TPoint, TPoint],
                  position_envelope_ref: Optional[ItemEnvelope] = None,
                  position_envelope_offset: int = 0,
                  color_envelope_ref: Optional[ItemEnvelope] = None,
                  color_envelope_offset: int = 0):
         self.corners = corners
+        self.pivot = pivot
         self.corner_colors = corner_colors
         self.texture_coords = texture_coordinates
         self.position_envelope_ref = position_envelope_ref
@@ -231,7 +233,7 @@ class ItemQuad(Item):
 
 class ItemQuadLayer(ItemLayer):
     def __init__(self,
-                 quads: list[ItemQuad],
+                 quads: List[ItemQuad],
                  image_ref: Optional[ItemImage] = None,
                  detail: bool = False,
                  name: str = ''):

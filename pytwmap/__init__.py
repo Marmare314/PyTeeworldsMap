@@ -21,5 +21,3 @@ from pytwmap.items import ItemQuadLayer as ItemQuadLayer
 # from pytwmap.items import SoundLayer as SoundLayer
 from pytwmap.items import ItemGroup as ItemGroup
 # from pytwmap.items import ItemSound as ItemSound
-
-from pytwmap.map_renderer import MapRenderer as MapRenderer

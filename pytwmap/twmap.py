@@ -40,6 +40,7 @@ class TWMap:
 
         if data.game_layer is None:
             raise RuntimeError('no gamelayer found')
+
         self.game_layer = data.game_layer
         self.tele_layer = data.tele_layer
         self.speedup_layer = data.speedup_layer

@@ -261,10 +261,10 @@ class DataFileReader:
         return layer_item
 
     def cquad_to_item(self, c_quad: CQuad):
-        corners = tuple([x.as_tuple() for x in c_quad.positions[:-1]])
+        map_coordinates = tuple([x.as_tuple() for x in c_quad.positions])
         corner_colors = tuple([x.as_tuple() for x in c_quad.colors])
         texture_coordinates = tuple([x.as_tuple() for x in c_quad.texture_coordinates])
-        assert len(corners) == 4
+        assert len(map_coordinates) == 5
         assert len(corner_colors) == 4
         assert len(texture_coordinates) == 4
 
@@ -272,7 +272,8 @@ class DataFileReader:
         col_env_ref: Optional[ItemEnvelope] = self._get_envelope(c_quad.color_envelope_ref)
 
         return ItemQuad(
-            corners=corners,
+            corners=map_coordinates[:-1],
+            pivot=map_coordinates[-1],
             corner_colors=corner_colors,
             texture_coordinates=texture_coordinates,
             position_envelope_ref=pos_env_ref,
@@ -324,8 +325,7 @@ class DataFileReader:
         if item.type in [LayerType.SOUNDS, LayerType.SOUNDS_DEPCRECATED]:
             return self._add_sound_layer(index, detail)
         elif item.type == LayerType.QUADS:
-            # return self._add_quad_layer(index, detail)
-            return None  # TODO: disable when saving quads is done
+            return self._add_quad_layer(index, detail)
         else:
             return self._add_tile_layer(index, detail)
 

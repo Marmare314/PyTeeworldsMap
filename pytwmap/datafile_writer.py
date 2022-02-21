@@ -107,9 +107,13 @@ class DataFileWriter:
         if isinstance(item, ItemTileLayer):
             c_items = self._construct_tile_layer(item)  # type: ignore
         elif isinstance(item, ItemQuadLayer):
-            c_items = self._construct_quad_layer(item)
-        else:
             raise NotImplementedError()
+            # c_items = self._construct_quad_layer(item)
+        elif isinstance(item, ItemSoundLayer):
+            raise NotImplementedError()
+            # c_items = self._construct_sound_layer(item)
+        else:
+            raise RuntimeError("layer has invalid type")
 
         self._item_types[ItemType.LAYER] += 1
         self._items[ItemType.LAYER].append(c_items)

@@ -1,4 +1,4 @@
-from typing import Type, TypeVar
+from typing import Type, TypeVar, List
 
 from pytwmap.stringfile import StringFile
 
@@ -198,11 +198,11 @@ class c_int32_point(c_struct):
         return self.x, self.y
 
 
-class c_array_impl(c_type, list[TCTYPE]):
+class c_array_impl(c_type, List[TCTYPE]):
     _length: int
     _type: Type[TCTYPE]
 
-    def __init__(self, value: list[TCTYPE]):
+    def __init__(self, value: 'list[TCTYPE]'):
         super().__init__(value)
 
         assert len(value) == self._length
